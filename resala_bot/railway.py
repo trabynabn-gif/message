@@ -1,8 +1,10 @@
-"""Entry point for deployments whose Railway root is resala_bot/."""
+"""Railway entry point with channel/group linking fixes."""
 
 import re
 
 import bot
+
+_original_handle_user_messages = bot.handle_user_messages
 
 
 def _next_source_id(sources):
@@ -46,8 +48,7 @@ def _save_source(user, chat, source_type):
             bot.save_data(data)
             return
 
-    source_id = _next_source_id(sources)
-    sources[source_id] = {
+    sources[_next_source_id(sources)] = {
         "name": chat_id,
         "title": title,
         "type": source_type,
@@ -63,11 +64,13 @@ async def handle_user_messages(update, context):
         return
 
     origin = getattr(message, "forward_origin", None)
-    source_chat = getattr(origin, "chat", None) or getattr(message, "forward_from_chat", None)
-    if source_chat is not None and getattr(source_chat, "type", None) in (
-        "channel", "group", "supergroup"
-    ):
-        source_type = "channel" if source_chat.type == "channel" else "group"
+    source_chat = getattr(origin, "chat", None)
+    if source_chat is None:
+        source_chat = getattr(message, "forward_from_chat", None)
+
+    chat_type = getattr(source_chat, "type", None)
+    if source_chat is not None and chat_type in ("channel", "group", "supergroup"):
+        source_type = "channel" if chat_type == "channel" else "group"
         _save_source(user, source_chat, source_type)
         context.user_data.pop("waiting_source_type", None)
         await message.reply_text(
@@ -82,7 +85,8 @@ async def handle_user_messages(update, context):
         username = _public_username(message.text or "")
         if not username:
             await message.reply_text(
-                "أرسل رابطًا عامًا بصيغة https://t.me/username أو @username."
+                "أرسل رابطًا عامًا بصيغة https://t.me/username أو @username. "
+                "روابط الدعوة الخاصة لا يمكن تحويلها إلى معرّف تلقائيًا."
             )
             return
         try:
@@ -113,7 +117,7 @@ async def handle_user_messages(update, context):
         )
         return
 
-    await bot.handle_user_messages(update, context)
+    await _original_handle_user_messages(update, context)
 
 
 bot.handle_user_messages = handle_user_messages

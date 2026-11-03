@@ -1,9 +1,13 @@
-"""Railway entry point with verified Telegram channel/group linking."""
+"""Railway entry point with channel/group linking fixes."""
 
 import re
-from urllib.parse import urlparse
 
 import bot
+
+# Keep the original handler before replacing it. The original handler processes
+# the bot's other message flows; calling bot.handle_user_messages after the
+# replacement would recursively call this wrapper.
+_original_handle_user_messages = bot.handle_user_messages
 
 
 def _next_source_id(sources):
@@ -14,12 +18,10 @@ def _next_source_id(sources):
 
 
 def _public_username(text):
-    """Extract a public Telegram username from @name or a t.me URL."""
     value = (text or "").strip().rstrip(".,!?;:)>]")
     if re.fullmatch(r"@[A-Za-z0-9_]{5,32}", value):
         return value[1:]
 
-    # Accept links with or without scheme and www, including links inside text.
     match = re.search(
         r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me)/([^\s/?#]+)",
         value,
@@ -31,40 +33,30 @@ def _public_username(text):
     username = match.group(1).strip(".,!?;:)>]")
     if username.startswith("+") or username.lower() in {"joinchat", "c"}:
         return None
-    if not re.fullmatch(r"[A-Za-z0-9_]{5,32}", username):
-        return None
-    return username
+    return username if re.fullmatch(r"[A-Za-z0-9_]{5,32}", username) else None
 
 
-def _store_source(user, chat, source_kind):
+def _save_source(user, chat, source_type):
     data = bot.load_data()
     users = data.setdefault("users", {})
-    user_id = str(user.id)
     user_data = users.setdefault(
-        user_id,
+        str(user.id),
         {"name": user.first_name, "interval": 10, "sources": {}},
     )
     sources = user_data.setdefault("sources", {})
     chat_id = str(chat.id)
+    title = chat.title or chat.username or chat_id
 
-    # Re-linking the same chat updates its title rather than making duplicates.
     for source in sources.values():
         if str(source.get("name")) == chat_id:
-            source.update(
-                {
-                    "name": chat_id,
-                    "title": chat.title or chat.username or chat_id,
-                    "type": source_kind,
-                    "status": "active",
-                }
-            )
+            source.update(name=chat_id, title=title, type=source_type, status="active")
             bot.save_data(data)
             return
 
     sources[_next_source_id(sources)] = {
         "name": chat_id,
-        "title": chat.title or chat.username or chat_id,
-        "type": source_kind,
+        "title": title,
+        "type": source_type,
         "status": "active",
     }
     bot.save_data(data)
@@ -76,33 +68,29 @@ async def handle_user_messages(update, context):
     if message is None or user is None:
         return
 
-    # Telegram's current API provides forward_origin; older updates may expose
-    # forward_from_chat. Either way, store the actual chat ID, not a link.
+    # Telegram's current API reports channel forwards through forward_origin;
+    # retain support for older updates exposing forward_from_chat.
     origin = getattr(message, "forward_origin", None)
     source_chat = getattr(origin, "chat", None)
     if source_chat is None:
         source_chat = getattr(message, "forward_from_chat", None)
 
-    if source_chat is not None:
-        chat_type = getattr(source_chat, "type", None)
-        if chat_type in ("channel", "group", "supergroup"):
-            source_kind = "channel" if chat_type == "channel" else "group"
-            _store_source(user, source_chat, source_kind)
-            context.user_data.pop("waiting_source_type", None)
-            await message.reply_text(
-                f"✅ تم ربط الـ {source_kind} بنجاح!\n"
-                f"الاسم: {source_chat.title or source_chat.username or source_chat.id}\n"
-                f"المعرّف: {source_chat.id}\n"
-                "تأكد أن البوت لديه صلاحية النشر فيها."
-            )
-            return
+    chat_type = getattr(source_chat, "type", None)
+    if source_chat is not None and chat_type in ("channel", "group", "supergroup"):
+        source_type = "channel" if chat_type == "channel" else "group"
+        _save_source(user, source_chat, source_type)
+        context.user_data.pop("waiting_source_type", None)
+        await message.reply_text(
+            f"✅ تم ربط الـ {source_type} بنجاح!\n"
+            f"الاسم: {source_chat.title or source_chat.username or source_chat.id}\n"
+            f"المعرّف: {source_chat.id}\n"
+            "تأكد أن البوت مضاف ولديه صلاحية النشر."
+        )
+        return
 
     waiting_type = context.user_data.get("waiting_source_type")
-    text = message.text or ""
-
-    # Only treat a link as a source after the user selected channel/group.
     if waiting_type in ("channel", "group"):
-        username = _public_username(text)
+        username = _public_username(message.text or "")
         if username is None:
             await message.reply_text(
                 "أرسل رابطًا عامًا بصيغة https://t.me/username أو @username. "
@@ -111,13 +99,13 @@ async def handle_user_messages(update, context):
             return
 
         try:
-            # Resolve and validate via Telegram, then persist the actual chat ID.
+            # Resolve the username and store Telegram's actual numeric chat ID.
             chat = await context.bot.get_chat(f"@{username}")
         except Exception as exc:
-            print(f"[LINK] Could not resolve public Telegram username @{username}: {exc}")
+            print(f"[LINK] Could not resolve @{username}: {exc}")
             await message.reply_text(
                 "لم أتمكن من الوصول إلى هذا الرابط. تأكد أن اسم المستخدم صحيح "
-                "وأن القناة/المجموعة عامة، ثم أضف البوت إليها."
+                "وأن القناة/المجموعة عامة، وأن البوت مضاف إليها."
             )
             return
 
@@ -126,29 +114,28 @@ async def handle_user_messages(update, context):
             await message.reply_text("الرابط لا يشير إلى قناة أو مجموعة Telegram.")
             return
 
-        actual_kind = "channel" if actual_type == "channel" else "group"
-        if actual_kind != waiting_type:
+        actual_source_type = "channel" if actual_type == "channel" else "group"
+        if actual_source_type != waiting_type:
             await message.reply_text(
-                f"هذا الرابط يعود إلى {actual_kind} وليس {waiting_type}. "
-                "ارجع واختر النوع الصحيح ثم أرسل الرابط مرة أخرى."
+                f"هذا الرابط يعود إلى {actual_source_type} وليس {waiting_type}. "
+                "اختر النوع الصحيح ثم أرسل الرابط مرة أخرى."
             )
             return
 
-        _store_source(user, chat, actual_kind)
+        _save_source(user, chat, actual_source_type)
         context.user_data.pop("waiting_source_type", None)
         await message.reply_text(
-            f"✅ تم ربط {('القناة' if actual_kind == 'channel' else 'المجموعة')} بنجاح!\n"
+            f"✅ تم ربط {('القناة' if actual_source_type == 'channel' else 'المجموعة')} بنجاح!\n"
             f"الاسم: {chat.title or chat.username or username}\n"
             f"المعرّف: {chat.id}\n"
             "تأكد أن البوت مضاف ولديه صلاحية النشر."
         )
         return
 
-    # Preserve the bot's existing handling for other message flows.
-    await bot.handle_user_messages(update, context)
+    # Preserve the bot's original handlers without recursion.
+    await _original_handle_user_messages(update, context)
 
 
-# bot.main() registers this patched function as the text and forward handler.
 bot.handle_user_messages = handle_user_messages
 
 if __name__ == "__main__":
