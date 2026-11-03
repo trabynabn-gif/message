@@ -1,4 +1,4 @@
-"""Railway entry point with channel linking and scheduled delivery fixes."""
+"""Railway entry point for deployments using resala_bot/ as their root."""
 
 import os
 import re
@@ -15,7 +15,7 @@ def _next_source_id(sources):
     return f"src_{index}"
 
 
-def _extract_username(text):
+def _public_username(text):
     value = (text or "").strip().rstrip(".,!?;:)>]")
     if re.fullmatch(r"@[A-Za-z0-9_]{5,32}", value):
         return value[1:]
@@ -32,7 +32,7 @@ def _extract_username(text):
     return username if re.fullmatch(r"[A-Za-z0-9_]{5,32}", username) else None
 
 
-def _save_source(user, chat, source_type):
+def _store_source(user, chat, source_type):
     data = bot.load_data()
     users = data.setdefault("users", {})
     user_data = users.setdefault(
@@ -69,19 +69,18 @@ async def handle_user_messages(update, context):
 
     if source_chat is not None and chat_type in ("channel", "group", "supergroup"):
         source_type = "channel" if chat_type == "channel" else "group"
-        _save_source(user, source_chat, source_type)
+        _store_source(user, source_chat, source_type)
         context.user_data.pop("waiting_source_type", None)
         await message.reply_text(
             f"✅ تم ربط الـ {source_type} بنجاح!\n"
             f"الاسم: {source_chat.title or source_chat.username or source_chat.id}\n"
-            f"المعرّف: {source_chat.id}\n"
-            "تأكد أن البوت مضاف ولديه صلاحية النشر."
+            f"المعرّف: {source_chat.id}"
         )
         return
 
     waiting_type = context.user_data.get("waiting_source_type")
     if waiting_type in ("channel", "group"):
-        username = _extract_username(message.text or "")
+        username = _public_username(message.text or "")
         if username is None:
             await message.reply_text(
                 "أرسل رابطًا عامًا بصيغة https://t.me/username أو @username. "
@@ -104,57 +103,18 @@ async def handle_user_messages(update, context):
         if actual_source_type != waiting_type:
             await message.reply_text("نوع الرابط لا يطابق اختيارك؛ اختر النوع الصحيح وأعد الإرسال.")
             return
-        _save_source(user, chat, actual_source_type)
+        _store_source(user, chat, actual_source_type)
         context.user_data.pop("waiting_source_type", None)
         await message.reply_text(
             f"✅ تم ربط {('القناة' if actual_source_type == 'channel' else 'المجموعة')}!\n"
             f"الاسم: {chat.title or chat.username or username}\n"
             f"المعرّف: {chat.id}\n"
-            "تأكد أن البوت مضاف ولديه صلاحية النشر."
+            "تأكد من إضافة البوت ومنحه صلاحية النشر."
         )
         return
 
+    # Preserve the built-in admin welcome-message editing flow.
     await _original_handle_user_messages(update, context)
-
-
-async def send_scheduled_sunnahs(context):
-    data = bot.load_data()
-    sunnahs = bot.load_sunnahs()
-    if not sunnahs:
-        print("[SCHEDULE] No sunnah data loaded; nothing to send.")
-        return
-    index = bot.get_current_index()
-    if not isinstance(index, int) or not 0 <= index < len(sunnahs):
-        index = 0
-    text = bot.format_sunnah_message(sunnahs[index], index + 1)
-
-    for user_id, user_info in data.get("users", {}).items():
-        for source in user_info.get("sources", {}).values():
-            if source.get("status") != "active":
-                continue
-            source_type = source.get("type")
-            target = str(user_id) if source_type == "private" else str(source.get("name", "")).strip()
-            if not target:
-                print(f"[SCHEDULE] Missing target for user {user_id}.")
-                continue
-            if source_type != "private":
-                if "t.me/" in target:
-                    username = _extract_username(target)
-                    if not username:
-                        print(f"[SCHEDULE] Invalid stored Telegram link: {target}")
-                        continue
-                    target = f"@{username}"
-                elif target.lstrip("-").isdigit():
-                    target = int(target)
-                elif not target.startswith("@"):
-                    target = f"@{target}"
-            try:
-                await context.bot.send_message(chat_id=target, text=text)
-                print(f"[SCHEDULE] Sent to {target}")
-            except Exception as exc:
-                print(f"[SCHEDULE] Failed to send to {target}: {exc}")
-
-    bot.save_current_index((index + 1) % len(sunnahs))
 
 
 def main():
@@ -169,12 +129,10 @@ def main():
         except ValueError as exc:
             raise RuntimeError("ADMIN_ID must be a numeric Telegram user ID.") from exc
     bot.handle_user_messages = handle_user_messages
-    bot.send_scheduled_sunnahs = send_scheduled_sunnahs
     bot.main()
 
 
 bot.handle_user_messages = handle_user_messages
-bot.send_scheduled_sunnahs = send_scheduled_sunnahs
 
 if __name__ == "__main__":
     main()
