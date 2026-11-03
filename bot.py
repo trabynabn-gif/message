@@ -1,31 +1,34 @@
-"""Compatibility shim loading the maintained bot implementation."""
+"""Compatibility shim loading the maintained bot implementation.
+
+Railway's repository-root Procfile runs railway.py, which imports this module.
+The implementation and durable JSON storage live under resala_bot/.
+"""
 
 import importlib.util
 from pathlib import Path
 
-from resala_bot.persistent_storage import install as install_persistent_storage
+from resala_bot.persistent_storage import install as _install_persistent_storage
 
-_impl_path = Path(__file__).resolve().parent / "resala_bot" / "bot.py"
-_spec = importlib.util.spec_from_file_location("_resala_bot_impl", _impl_path)
-if _spec is None or _spec.loader is None:
-    raise ImportError(f"Cannot load bot implementation from {_impl_path}")
-_impl = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_impl)
-install_persistent_storage(_impl)
+_IMPL_PATH = Path(__file__).resolve().parent / "resala_bot" / "bot.py"
+_SPEC = importlib.util.spec_from_file_location("_resala_bot_impl", _IMPL_PATH)
+if _SPEC is None or _SPEC.loader is None:
+    raise ImportError(f"Cannot load bot implementation from {_IMPL_PATH}")
+_IMPL = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_IMPL)
+_install_persistent_storage(_IMPL)
 
-# Re-export the bot API expected by railway.py and existing callers.
-for _name in dir(_impl):
+for _name in dir(_IMPL):
     if not _name.startswith("_"):
-        globals()[_name] = getattr(_impl, _name)
+        globals()[_name] = getattr(_IMPL, _name)
 
 
 def main():
-    # railway.py may inject token/admin settings and patched handlers here.
-    _impl.TOKEN = TOKEN
-    _impl.ADMIN_ID = ADMIN_ID
-    _impl.handle_user_messages = handle_user_messages
-    _impl.send_scheduled_sunnahs = send_scheduled_sunnahs
-    _impl.main()
+    """Forward patched config/handlers from the shim into the implementation."""
+    _IMPL.TOKEN = TOKEN
+    _IMPL.ADMIN_ID = ADMIN_ID
+    _IMPL.handle_user_messages = handle_user_messages
+    _IMPL.send_scheduled_sunnahs = send_scheduled_sunnahs
+    _IMPL.main()
 
 
 if __name__ == "__main__":
