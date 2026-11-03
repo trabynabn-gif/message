@@ -1,510 +1,184 @@
+"""Railway entry point with reliable channel/group linking and message delivery."""
+
 import os
-import json
 import re
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, ReplyKeyboardRemove
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-ADMIN_ID_ENV = os.getenv("ADMIN_ID")
-ADMIN_ID = int(ADMIN_ID_ENV) if ADMIN_ID_ENV and ADMIN_ID_ENV.isdigit() else 1520960859  
-DB_FILE = "users.json"
-SUNNAH_FILE = "sunnahs.json"
-PROGRESS_FILE = "progress.json"
+import bot
 
-DEFAULT_WELCOME = "📩 أهلاً بك يا {name} في بوت رِسالة 🌿\n\nهل فكرت يومًا أن رسالة قصيرة قد تكون سببًا في تذكير إنسان بسنة من سنن النبي ﷺ؟\n\nمن هنا جاءت فكرة رِسالة؛ بوت هدفه نشر الأحاديث النبوية الصحيحة وإحياء السنن المهجورة، لتظل سنة النبي ﷺ حاضرة في حياتنا اليومية.\n\n🌟 ماذا يقدم لك بوت رِسالة؟\n📖 أحاديث نبوية: تصفح مجموعة من الأحاديث مع ذكر مصدرها ومعناها بطريقة واضحة.\n⏰ تذكيرات دورية: تصلك رسائل تحتوي على أحاديث وسنن نبوية على فترات تختارها بنفسك.\n🔔 التحكم الكامل: يمكنك تشغيل التذكيرات أو إيقافها وتحديد الوقت المناسب لك.\n📚 إحياء السنن المهجورة: نتعرف معًا على سنن نبوية قد يغفل عنها كثير من الناس، ونعمل على إحيائها ونشرها.\n\n📢 هل لديك قناة أو مجموعة على تيليجرام؟\nلا تجعل الخير يتوقف عندك وحدك! يمكنك إضافة بوت رِسالة إلى قناتك أو مجموعتك، وربطها بها حتى تساهم في نشر الأحاديث النبوية والسنن بين أعضائك بشكل دوري.\n\n❤️ رِسالة... تذكيرٌ يصل، وخيرٌ يُرجى، وسُنّةٌ تُحيا."
+_original_handle_user_messages = bot.handle_user_messages
 
-def load_data():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data.get("users"), list):
-                    return {
-                        "users": {},
-                        "welcome_msg": DEFAULT_WELCOME,
-                        "app_file": None
-                    }
-                if not data.get("welcome_msg"):
-                    data["welcome_msg"] = DEFAULT_WELCOME
-                return data
-        except Exception:
-            pass
-            
-    return {
-        "users": {},
-        "welcome_msg": DEFAULT_WELCOME,
-        "app_file": None
-    }
 
-def save_data(data):
-    with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+def _next_source_id(sources):
+    index = 1
+    while f"src_{index}" in sources:
+        index += 1
+    return f"src_{index}"
 
-def load_sunnahs():
-    if not os.path.exists(SUNNAH_FILE):
-        return []
-    try:
-        with open(SUNNAH_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return []
 
-def get_current_index():
-    if not os.path.exists(PROGRESS_FILE):
-        return 0
-    try:
-        with open(PROGRESS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f).get("index", 0)
-    except:
-        return 0
-
-def save_current_index(index):
-    with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
-        json.dump({"index": index}, f)
-
-def format_sunnah_message(sunnah, index):
-    raw_text = sunnah.get('text', '')
-    clean_text = re.sub(r'\(حديث رقم.*?\)', '', raw_text).strip()
-    clean_text = re.sub(r'حديث رقم.*', '', clean_text).strip()
-    clean_text = re.sub(r'\(رسالة.*?\)', '', clean_text).strip()
-
-    text_body = (
-        "💌:رسـالــة\n"
-        "ــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــ\n"
-        f"{clean_text}\n"
-        "ـــــــ...\n"
-        "المعنا..\n"
-        f"{sunnah.get('meaning', '')}\n"
-        "ـــــــ...\n"
-        f"[{sunnah.get('source', '')}]"
+def _extract_username(text):
+    value = (text or "").strip().rstrip(".,!?;:)>]")
+    if re.fullmatch(r"@[A-Za-z0-9_]{5,32}", value):
+        return value[1:]
+    match = re.search(
+        r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me)/([^\s/?#]+)",
+        value,
+        re.IGNORECASE,
     )
-    return text_body + f"\n\n(رسالة {index})"
+    if not match:
+        return None
+    username = match.group(1).strip(".,!?;:)>]")
+    if username.startswith("+") or username.lower() in {"joinchat", "c"}:
+        return None
+    return username if re.fullmatch(r"[A-Za-z0-9_]{5,32}", username) else None
 
-async def set_bot_commands(application):
-    commands = [BotCommand("start", "Start Bot 🚀")]
-    await application.bot.set_my_commands(commands)
 
-async def send_scheduled_sunnahs(context: ContextTypes.DEFAULT_TYPE):
-    data = load_data()
-    sunnahs = load_sunnahs()
-    if not sunnahs:
-        return
-
-    index = get_current_index()
-    if index >= len(sunnahs):
-        index = 0
-        
-    chosen = sunnahs[index]
-    formatted_msg = format_sunnah_message(chosen, index + 1)
-    
-    save_current_index((index + 1) % len(sunnahs))
-
-    for chat_id, user_info in data.get("users", {}).items():
-        sources = user_info.get("sources", {})
-        for s_id, s_info in sources.items():
-            if s_info.get("status") == "active":
-                target = chat_id if s_info.get("type") == "private" else s_info.get("name")
-                if target:
-                    try:
-                        if "t.me/" in target:
-                            target = "@" + target.rstrip("/").split("/")[-1]
-                        elif not target.startswith("@") and not target.startswith("-") and s_info.get("type") != "private":
-                            target = "@" + target
-
-                        await context.bot.send_message(chat_id=target, text=formatted_msg)
-                    except Exception as e:
-                        print(f"[ERROR] Failed to send to {target}: {e}")
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    user = update.effective_user
-    chat_id = str(user.id)
-    data = load_data()
-    
-    if chat_id not in data["users"]:
-        data["users"][chat_id] = {
-            "name": user.first_name, 
-            "interval": 10,
-            "sources": {
-                "private": {"name": "المحادثة الخاصة", "type": "private", "status": "active"}
-            }
-        }
-        save_data(data)
-
-    keyboard = [
-        [InlineKeyboardButton("📖 تصفح الأحاديث", callback_data="next_sunnah")],
-        [InlineKeyboardButton("⏱️ تعديل وقت التذكير", callback_data="set_time")],
-        [InlineKeyboardButton("📢 القنوات والمجموعات", callback_data="sources")],
-        [InlineKeyboardButton("🎛️ التحكم (المصادر)", callback_data="control_panel")],
-        [InlineKeyboardButton("ℹ️ حول البوت", callback_data="about")],
-        [InlineKeyboardButton("📱 تحميل التطبيق", callback_data="app")],
-        [InlineKeyboardButton("📞 تواصل معنا", url=f"tg://user?id={ADMIN_ID}")]
-    ]
-    
-    if user.id == ADMIN_ID:
-        keyboard.append([InlineKeyboardButton("⚙️ إعدادات المالك", callback_data="admin_panel")])
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    template = data.get("welcome_msg", DEFAULT_WELCOME)
-    welcome_text = template.replace("{name}", user.first_name)
-    
-    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user = update.effective_user
-    chat_id = str(user.id)
-    data = load_data()
-    
-    if query.data == "next_sunnah":
-        sunnahs = load_sunnahs()
-        if not sunnahs:
-            await query.answer("⚠️ ملف الأحاديث غير موجود أو فارغ!", show_alert=True)
+def _save_source(user, chat, source_type):
+    data = bot.load_data()
+    users = data.setdefault("users", {})
+    user_data = users.setdefault(
+        str(user.id),
+        {"name": user.first_name, "interval": 10, "sources": {}},
+    )
+    sources = user_data.setdefault("sources", {})
+    chat_id = str(chat.id)
+    title = chat.title or chat.username or chat_id
+    for source in sources.values():
+        if str(source.get("name")) == chat_id:
+            source.update(name=chat_id, title=title, type=source_type, status="active")
+            bot.save_data(data)
             return
-            
-        index = get_current_index()
-        if index >= len(sunnahs):
-            index = 0
-        
-        chosen = sunnahs[index]
-        formatted_msg = format_sunnah_message(chosen, index + 1)
-        save_current_index((index + 1) % len(sunnahs))
-        
-        keyboard = [
-            [InlineKeyboardButton("📖 حديث جديد (التالي)", callback_data="next_sunnah")],
-            [InlineKeyboardButton("⏱️ تعديل وقت التذكير", callback_data="set_time")],
-            [InlineKeyboardButton("📢 القنوات والمجموعات", callback_data="sources")],
-            [InlineKeyboardButton("🎛️ التحكم (المصادر)", callback_data="control_panel")],
-            [InlineKeyboardButton("ℹ️ حول البوت", callback_data="about")],
-            [InlineKeyboardButton("📱 تحميل التطبيق", callback_data="app")],
-            [InlineKeyboardButton("📞 تواصل معنا", url=f"tg://user?id={ADMIN_ID}")]
-        ]
-        if user.id == ADMIN_ID:
-            keyboard.append([InlineKeyboardButton("⚙️ إعدادات المالك", callback_data="admin_panel")])
-            
-        try:
-            await query.edit_message_text(text=formatted_msg, reply_markup=InlineKeyboardMarkup(keyboard))
-        except Exception:
-            await query.answer("تم عرض الحديث بالفعل أو حدث تحديث", show_alert=False)
-            
-    elif query.data == "about":
-        text = (
-            "📖 **عن بوت رِسالة:**\n\n"
-            "الحياة السريعة أهلت الكثير من السنن النبوية العظيمة التي كان يحرص عليها النبي ﷺ في يومه وليلته، فأصبحت منسية أو مهجورة بين الناس.\n\n"
-            "💡 **فكرة البوت:**\n"
-            "هذا المشروع وُجد ليكون رفيقك اليومي ومذكرك الدائم. يقوم البوت بإرسال سنن نبوية صحيحة والثابتة بشكل منتظم."
-        )
-        keyboard = [[InlineKeyboardButton("🔙 الرجوع للقائمة الرئيسية", callback_data="main_menu")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-        
-    elif query.data == "set_time":
-        text = "⏱️ **اختر وقت التذكير المناسب لك:**\nحدد الفاصل الزمني لإرسال التذكيرات والسنن:"
-        keyboard = [
-            [InlineKeyboardButton("10 دقائق", callback_data="t_10"), InlineKeyboardButton("15 دقيقة", callback_data="t_15")],
-            [InlineKeyboardButton("30 دقيقة", callback_data="t_30"), InlineKeyboardButton("1 ساعة", callback_data="t_60")],
-            [InlineKeyboardButton("2 ساعات", callback_data="t_120"), InlineKeyboardButton("4 ساعات", callback_data="t_240")],
-            [InlineKeyboardButton("8 ساعات", callback_data="t_480"), InlineKeyboardButton("12 ساعة", callback_data="t_720")],
-            [InlineKeyboardButton("24 ساعة", callback_data="t_1440")],
-            [InlineKeyboardButton("🔙 الرجوع للقائمة الرئيسية", callback_data="main_menu")]
-        ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    sources[_next_source_id(sources)] = {
+        "name": chat_id,
+        "title": title,
+        "type": source_type,
+        "status": "active",
+    }
+    bot.save_data(data)
 
-    elif query.data.startswith("t_"):
-        minutes = int(query.data.split("_")[1])
-        if chat_id in data["users"]:
-            data["users"][chat_id]["interval"] = minutes
-            save_data(data)
-            
-        text = f"✅ تم حفظ الوقت بنجاح ({minutes} دقيقة)! وسيتم إرسال التذكيرات بالفاصل الزمني الجديد."
-        keyboard = [[InlineKeyboardButton("🔙 الرجوع للقائمة الرئيسية", callback_data="main_menu")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
-    elif query.data == "sources":
-        text = "📢 **إدارة القنوات والمجموعات:**\nاختر المكان الذي تريد ربط التذكيرات به:"
-        keyboard = [
-            [InlineKeyboardButton("👥 مجموعة", callback_data="src_group")],
-            [InlineKeyboardButton("📢 قناة", callback_data="src_channel")],
-            [InlineKeyboardButton("💬 المحادثة هنا (الخاص)", callback_data="src_private")],
-            [InlineKeyboardButton("🔙 الرجوع للقائمة الرئيسية", callback_data="main_menu")]
-        ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "src_group":
-        context.user_data["waiting_source_type"] = "group"
-        text = "📌 **ربط مجموعة:**\nأرسل الآن رابط مجموعتك أو معرفها (مثل @username) أو قم بتوجيه رسالة (Forward) هنا."
-        keyboard = [[InlineKeyboardButton("🔙 الرجوع", callback_data="sources")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "src_channel":
-        context.user_data["waiting_source_type"] = "channel"
-        text = "📌 **ربط قناة:**\nأرسل الآن رابط قناتك أو معرفها (مثل @username) أو قم بتوجيه رسالة (Forward) هنا."
-        keyboard = [[InlineKeyboardButton("🔙 الرجوع", callback_data="sources")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "src_private":
-        if chat_id in data["users"]:
-            data["users"][chat_id]["sources"]["private"] = {"name": "المحادثة الخاصة", "type": "private", "status": "active"}
-            save_data(data)
-        text = "✅ **تم تفعيل المحادثة الخاصة بنجاح!**"
-        keyboard = [[InlineKeyboardButton("🔙 الرجوع للقائمة الرئيسية", callback_data="main_menu")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "control_panel":
-        text = "🎛️ **لوحة التحكم بالمصادر:**\nاختر القسم الذي تريد إدارته:"
-        keyboard = [
-            [InlineKeyboardButton("👥 المجموعات", callback_data="ctrl_groups"), InlineKeyboardButton("📢 القنوات", callback_data="ctrl_channels")],
-            [InlineKeyboardButton("💬 المحادثة الخاصة", callback_data="ctrl_private")],
-            [InlineKeyboardButton("🔙 الرجوع للقائمة الرئيسية", callback_data="main_menu")]
-        ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "ctrl_private":
-        p_status = data["users"].get(chat_id, {}).get("sources", {}).get("private", {}).get("status", "active")
-        status_text = "🟢 مفعل (يعمل)" if p_status == "active" else "🔴 متوقف"
-        toggle_btn_text = "🔴 إيقاف البوت" if p_status == "active" else "🟢 تشغيل البوت"
-        
-        text = f"💬 **المحادثة الخاصة:**\n• الحالة الحالية: {status_text}"
-        keyboard = [
-            [InlineKeyboardButton(toggle_btn_text, callback_data="toggle_private")],
-            [InlineKeyboardButton("🔙 الرجوع للتحكم", callback_data="control_panel")]
-        ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "toggle_private":
-        if chat_id in data["users"] and "private" in data["users"][chat_id]["sources"]:
-            curr = data["users"][chat_id]["sources"]["private"]["status"]
-            data["users"][chat_id]["sources"]["private"]["status"] = "inactive" if curr == "active" else "active"
-            save_data(data)
-        
-        p_status = data["users"].get(chat_id, {}).get("sources", {}).get("private", {}).get("status", "active")
-        status_text = "🟢 مفعل (يعمل)" if p_status == "active" else "🔴 متوقف"
-        toggle_btn_text = "🔴 إيقاف البوت" if p_status == "active" else "🟢 تشغيل البوت"
-        
-        text = f"✅ **تم تحديث الحالة بنجاح!**\n\n💬 **المحادثة الخاصة:**\n• الحالة الحالية: {status_text}"
-        keyboard = [
-            [InlineKeyboardButton(toggle_btn_text, callback_data="toggle_private")],
-            [InlineKeyboardButton("🔙 الرجوع للتحكم", callback_data="control_panel")]
-        ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data in ["ctrl_groups", "ctrl_channels"]:
-        st_type = "group" if query.data == "ctrl_groups" else "channel"
-        user_sources = data["users"].get(chat_id, {}).get("sources", {})
-        
-        keyboard = []
-        for s_id, s_info in user_sources.items():
-            if s_info.get("type") == st_type:
-                status_icon = "🟢" if s_info.get("status") == "active" else "🔴"
-                s_name = s_info.get('title', s_info.get('name'))
-                keyboard.append([
-                    InlineKeyboardButton(f"{s_name} {status_icon}", callback_data=f"toggle_{s_id}"),
-                    InlineKeyboardButton("🗑️ حذف", callback_data=f"del_{s_id}")
-                ])
-        
-        if not keyboard:
-            keyboard.append([InlineKeyboardButton("لا توجد مصادر مضافة بعد", callback_data="control_panel")])
-            
-        keyboard.append([InlineKeyboardButton("🔙 الرجوع للتحكم", callback_data="control_panel")])
-        title = "👥 **إدارة المجموعات:**" if st_type == "group" else "📢 **إدارة القنوات:**"
-        await query.edit_message_text(f"{title}\nيمكنك التبديل بين تشغيل/إيقاف أو الحذف:", reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data.startswith("toggle_"):
-        s_id = query.data.split("_")[1]
-        if chat_id in data["users"] and s_id in data["users"][chat_id]["sources"]:
-            current_status = data["users"][chat_id]["sources"][s_id]["status"]
-            new_status = "inactive" if current_status == "active" else "active"
-            data["users"][chat_id]["sources"][s_id]["status"] = new_status
-            save_data(data)
-            
-        text = "✅ تم تحديث حالة المصدر بنجاح!"
-        keyboard = [[InlineKeyboardButton("🔙 الرجوع للتحكم", callback_data="control_panel")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data.startswith("del_"):
-        s_id = query.data.split("_")[1]
-        if chat_id in data["users"] and s_id in data["users"][chat_id]["sources"]:
-            del data["users"][chat_id]["sources"][s_id]
-            save_data(data)
-            
-        text = "🗑️ تم إزالة وحذف المصدر بنجاح!"
-        keyboard = [[InlineKeyboardButton("🔙 الرجوع للتحكم", callback_data="control_panel")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "app":
-        app_file = data.get("app_file")
-        if app_file:
-            text = "📱 تطبيق 'رِسالة' جاهز للتحميل عبر الملف المرفق أدناه 🚀"
-            await context.bot.send_document(chat_id=chat_id, document=app_file, caption="تطبيق رِسالة الرسمي 📱")
-            keyboard = [[InlineKeyboardButton("🔙 الرجوع للقائمة الرئيسية", callback_data="main_menu")]]
-            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-        else:
-            text = "📱 نعمل حالياً على تطوير تطبيق 'رِسالة' للهواتف الذكية، وسوف يتم إخبارك فور إطلاقه رسمياً!"
-            keyboard = [[InlineKeyboardButton("🔙 الرجوع للقائمة الرئيسية", callback_data="main_menu")]]
-            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "admin_panel" and user.id == ADMIN_ID:
-        text = "⚙️ **إعدادات المالك:**\nاختر الإجراء المطلوب للإدارة:"
-        keyboard = [
-            [InlineKeyboardButton("✏️ تعديل رسالة الترحيب", callback_data="adm_edit_wel")],
-            [InlineKeyboardButton("📊 معرفة عدد المستخدمين", callback_data="adm_users_count")],
-            [InlineKeyboardButton("📢 إذاعة رسالة", callback_data="adm_broadcast")],
-            [InlineKeyboardButton("📱 رفع ملف التطبيق", callback_data="adm_upload_app")],
-            [InlineKeyboardButton("🔙 الرجوع للقائمة الرئيسية", callback_data="main_menu")]
-        ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "adm_users_count" and user.id == ADMIN_ID:
-        total_users = len(data["users"])
-        text = f"📊 **إحصائيات المستخدمين:**\n\n• إجمالي المستخدمين: `{total_users}` مستخدم."
-        keyboard = [[InlineKeyboardButton("🔙 رجوع لإعدادات المالك", callback_data="admin_panel")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "adm_broadcast" and user.id == ADMIN_ID:
-        text = "📢 **اختر نوع الإذاعة المطلوبة:**"
-        keyboard = [
-            [InlineKeyboardButton("إذاعة الكل", callback_data="bc_all")],
-            [InlineKeyboardButton("إذاعة المحادثة الخاصة", callback_data="bc_private")],
-            [InlineKeyboardButton("🔙 رجوع لإعدادات المالك", callback_data="admin_panel")]
-        ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data.startswith("bc_") and user.id == ADMIN_ID:
-        bc_type = query.data.split("_")[1]
-        context.user_data["waiting_broadcast"] = bc_type
-        text = f"✍️ أرسل الآن نص رسالة الإذاعة لنوع: **{bc_type}**"
-        keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="adm_broadcast")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "adm_upload_app" and user.id == ADMIN_ID:
-        context.user_data["waiting_app_file"] = True
-        text = "📱 أرسل الآن ملف التطبيق (.apk) في رسالة مباشرة لكي يتم حفظه وربطه بزر تحميل التطبيق."
-        keyboard = [[InlineKeyboardButton("🔙 رجوع لإعدادات المالك", callback_data="admin_panel")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "adm_edit_wel" and user.id == ADMIN_ID:
-        context.user_data["waiting_welcome"] = True
-        text = "✏️ أرسل الآن نص رسالة الترحيب الجديدة (تأكد من وضع `{name}` مكان اسم المستخدم لتظهر بشكل صحيح)."
-        keyboard = [[InlineKeyboardButton("🔙 رجوع لإعدادات المالك", callback_data="admin_panel")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "main_menu":
-        context.user_data.clear()
-        keyboard = [
-            [InlineKeyboardButton("📖 تصفح الأحاديث", callback_data="next_sunnah")],
-            [InlineKeyboardButton("⏱️ تعديل وقت التذكير", callback_data="set_time")],
-            [InlineKeyboardButton("📢 القنوات والمجموعات", callback_data="sources")],
-            [InlineKeyboardButton("🎛️ التحكم (المصادر)", callback_data="control_panel")],
-            [InlineKeyboardButton("ℹ️ حول البوت", callback_data="about")],
-            [InlineKeyboardButton("📱 تحميل التطبيق", callback_data="app")],
-            [InlineKeyboardButton("📞 تواصل معنا", url=f"tg://user?id={ADMIN_ID}")]
-        ]
-        if user.id == ADMIN_ID:
-            keyboard.append([InlineKeyboardButton("⚙️ إعدادات المالك", callback_data="admin_panel")])
-            
-        template = data.get("welcome_msg", DEFAULT_WELCOME)
-        welcome_text = template.replace("{name}", user.first_name)
-        await query.edit_message_text(f"{welcome_text}\n\nالقائمة الرئيسية:", reply_markup=InlineKeyboardMarkup(keyboard))
-
-async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_user_messages(update, context):
+    message = update.effective_message
     user = update.effective_user
-    if not user or not update.message:
-        return
-    chat_id = str(user.id)
-    text = update.message.text or update.message.caption or ""
-    data = load_data()
-    
-    # 1. استقبال وتعديل رسالة الترحيب من الأدمن (أول شرط يتم فحصه)
-    if user.id == ADMIN_ID and context.user_data.get("waiting_welcome"):
-        data["welcome_msg"] = text
-        save_data(data)
-        context.user_data.clear()
-        await update.message.reply_text("✅ تم تحديث وحفظ رسالة الترحيب بنجاح يا صاحب البوت! اضغط /start لرؤيتها.")
+    if message is None or user is None:
         return
 
-    # 2. استقبال الإذاعة من الأدمن
-    if user.id == ADMIN_ID and context.user_data.get("waiting_broadcast"):
-        bc_type = context.user_data["waiting_broadcast"]
-        context.user_data.clear()
-        await update.message.reply_text(f"🚀 جاري بدء الإذاعة ({bc_type}) بنجاح للمستخدمين...")
-        return
+    origin = getattr(message, "forward_origin", None)
+    source_chat = getattr(origin, "chat", None)
+    if source_chat is None:
+        source_chat = getattr(message, "forward_from_chat", None)
+    chat_type = getattr(source_chat, "type", None)
 
-    # 3. معالجة الرسالة المحولة (Forward)
-    if update.message.forward_from_chat or (update.message.forward_origin and hasattr(update.message.forward_origin, 'chat')):
-        f_chat = update.message.forward_from_chat or update.message.forward_origin.chat
-        f_id = str(f_chat.id)
-        target_name = f"@{f_chat.username}" if f_chat.username else f_id
-        f_title = f_chat.title or target_name
-        f_type = "channel" if f_chat.type == "channel" else "group"
-        
-        source_id = "src_" + str(len(data["users"].get(chat_id, {}).get("sources", {})) + 1)
-        if chat_id in data["users"]:
-            data["users"][chat_id]["sources"][source_id] = {
-                "name": target_name,
-                "title": f_title,
-                "type": f_type,
-                "status": "active"
-            }
-            save_data(data)
-            
-        await update.message.reply_text(
-            f"✅ تم ربط الـ {f_type} بنجاح عبر التوجيه!\n"
-            f"الاسم: `{f_title}`\n"
-            f"المعرف: `{target_name}`"
+    if source_chat is not None and chat_type in ("channel", "group", "supergroup"):
+        source_type = "channel" if chat_type == "channel" else "group"
+        _save_source(user, source_chat, source_type)
+        context.user_data.pop("waiting_source_type", None)
+        await message.reply_text(
+            f"✅ تم ربط الـ {source_type} بنجاح!\n"
+            f"الاسم: {source_chat.title or source_chat.username or source_chat.id}\n"
+            f"المعرّف: {source_chat.id}\n"
+            "تأكد أن البوت مضاف ولديه صلاحية النشر."
         )
         return
 
-    # 4. معالجة إرسال الرابط المباشر
-    if context.user_data.get("waiting_source_type"):
-        st_type = context.user_data["waiting_source_type"]
-        context.user_data.clear()
-        
-        target_input = text.strip()
-        if "t.me/" in target_input:
-            target_input = "@" + target_input.rstrip("/").split("/")[-1]
-        elif not target_input.startswith("@") and not target_input.startswith("-"):
-            target_input = "@" + target_input
-
+    waiting_type = context.user_data.get("waiting_source_type")
+    if waiting_type in ("channel", "group"):
+        username = _extract_username(message.text or "")
+        if username is None:
+            await message.reply_text(
+                "أرسل رابطًا عامًا بصيغة https://t.me/username أو @username. "
+                "رابط الدعوة الخاص لا يكفي وحده للربط."
+            )
+            return
         try:
-            chat_obj = await context.bot.get_chat(target_input)
-            target_id = str(chat_obj.id)
-            target_title = chat_obj.title or target_input
-            target_username = f"@{chat_obj.username}" if chat_obj.username else target_id
-        except Exception:
-            target_id = target_input
-            target_title = target_input
-            target_username = target_input
+            chat = await context.bot.get_chat(f"@{username}")
+        except Exception as exc:
+            print(f"[LINK] Failed resolving @{username}: {exc}")
+            await message.reply_text(
+                "تعذّر الوصول للرابط. تحقق من اسم المستخدم، وأضف البوت إلى القناة/المجموعة."
+            )
+            return
 
-        source_id = "src_" + str(len(data["users"].get(chat_id, {}).get("sources", {})) + 1)
-        if chat_id in data["users"]:
-            data["users"][chat_id]["sources"][source_id] = {
-                "name": target_username,
-                "title": target_title,
-                "type": st_type,
-                "status": "active"
-            }
-            save_data(data)
-            
-        await update.message.reply_text(f"✅ تم إضافة القناة/المجموعة بنجاح:\n`{target_title}`")
+        actual_type = getattr(chat, "type", None)
+        if actual_type not in ("channel", "group", "supergroup"):
+            await message.reply_text("الرابط لا يشير إلى قناة أو مجموعة.")
+            return
+        actual_source_type = "channel" if actual_type == "channel" else "group"
+        if actual_source_type != waiting_type:
+            await message.reply_text("نوع الرابط لا يطابق اختيارك؛ اختر النوع الصحيح وأعد الإرسال.")
+            return
+
+        _save_source(user, chat, actual_source_type)
+        context.user_data.pop("waiting_source_type", None)
+        await message.reply_text(
+            f"✅ تم ربط {('القناة' if actual_source_type == 'channel' else 'المجموعة')}!\n"
+            f"الاسم: {chat.title or chat.username or username}\n"
+            f"المعرّف: {chat.id}\n"
+            "سيبدأ الإرسال الدوري إذا كان البوت مضافًا وله صلاحية النشر."
+        )
         return
+
+    await _original_handle_user_messages(update, context)
+
+
+async def send_scheduled_sunnahs(context):
+    """Send scheduled content using stored numeric chat IDs or public usernames."""
+    data = bot.load_data()
+    sunnahs = bot.load_sunnahs()
+    if not sunnahs:
+        print("[SCHEDULE] No sunnah data loaded; nothing to send.")
+        return
+
+    index = bot.get_current_index()
+    if not isinstance(index, int) or index < 0 or index >= len(sunnahs):
+        index = 0
+    text = bot.format_sunnah_message(sunnahs[index], index + 1)
+    bot.save_current_index((index + 1) % len(sunnahs))
+
+    for user_id, user_info in data.get("users", {}).items():
+        for source in user_info.get("sources", {}).values():
+            if source.get("status") != "active":
+                continue
+            source_type = source.get("type")
+            target = str(user_id) if source_type == "private" else str(source.get("name", "")).strip()
+            if not target:
+                print(f"[SCHEDULE] Missing target for user {user_id}.")
+                continue
+            if source_type != "private":
+                if "t.me/" in target:
+                    username = _extract_username(target)
+                    if not username:
+                        print(f"[SCHEDULE] Invalid stored Telegram link: {target}")
+                        continue
+                    target = f"@{username}"
+                elif target.lstrip("-").isdigit():
+                    target = int(target)
+                elif not target.startswith("@"):
+                    target = f"@{target}"
+            try:
+                await context.bot.send_message(chat_id=target, text=text)
+                print(f"[SCHEDULE] Sent to {target}")
+            except Exception as exc:
+                print(f"[SCHEDULE] Failed to send to {target}: {exc}")
+
 
 def main():
-    if not TOKEN:
-        print("[ERROR] TELEGRAM_BOT_TOKEN is missing!")
-        return
-        
-    application = Application.builder().token(TOKEN).post_init(set_bot_commands).build()
-    
-    job_queue = application.job_queue
-    job_queue.run_repeating(send_scheduled_sunnahs, interval=600, first=10)
+    token = (os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("BOT_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError("Set TELEGRAM_BOT_TOKEN in Railway Variables.")
+    bot.TOKEN = token
+    admin_id = (os.environ.get("ADMIN_ID") or "").strip()
+    if admin_id:
+        try:
+            bot.ADMIN_ID = int(admin_id)
+        except ValueError as exc:
+            raise RuntimeError("ADMIN_ID must be a numeric Telegram user ID.") from exc
+    bot.handle_user_messages = handle_user_messages
+    bot.send_scheduled_sunnahs = send_scheduled_sunnahs
+    bot.main()
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_messages))
-    application.add_handler(MessageHandler(filters.FORWARDED, handle_user_messages))
-    
-    print("Bot Resala is running successfully with direct welcome text capture...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+bot.handle_user_messages = handle_user_messages
+bot.send_scheduled_sunnahs = send_scheduled_sunnahs
 
 if __name__ == "__main__":
     main()
