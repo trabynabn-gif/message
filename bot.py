@@ -1,14 +1,46 @@
+
 import os
 import json
 import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-TOKEN = "9284884972:AAGINY_egv4Ob-4GqW4s5e_CowN4V4-NtdU"
-ADMIN_ID = 1520960859  
+TOKEN = "ضع_التوكن_الجديد_هنا"
+ADMIN_ID = 1520960859
 DB_FILE = "users.json"
 SUNNAH_FILE = "sunnahs.json"
 PROGRESS_FILE = "progress.json"
+
+WELCOME_MESSAGE = """📩 أهلاً بك يا {name} في بوت رِسالة 🌿
+
+هل فكرت يومًا أن رسالة قصيرة قد تكون سببًا في تذكير إنسان بسنة من سنن النبي ﷺ؟
+
+من هنا جاءت فكرة رِسالة؛ بوت هدفه نشر الأحاديث النبوية الصحيحة وإحياء السنن المهجورة، لتظل سنة النبي ﷺ حاضرة في حياتنا اليومية.
+
+🌟 ماذا يقدم لك بوت رِسالة؟
+
+📖 أحاديث نبوية: تصفح مجموعة من الأحاديث مع ذكر مصدرها ومعناها بطريقة واضحة.
+
+⏰ تذكيرات دورية: تصلك رسائل تحتوي على أحاديث وسنن نبوية على فترات تختارها بنفسك.
+
+🔔 تحكم كامل: يمكنك تشغيل التذكيرات أو إيقافها وتحديد الوقت المناسب لك.
+
+📚 إحياء السنن المهجورة: نتعرف معًا على سنن نبوية قد غفل عنها كثير من الناس، ونعمل على إحيائها ونشرها.
+
+📢 هل لديك قناة أو مجموعة على تيليجرام؟
+
+لا تجعل الخير يتوقف عندك وحدك!
+
+يمكنك إضافة بوت رِسالة إلى قناتك أو مجموعتك، وربطها به حتى تساهم في نشر الأحاديث النبوية والسنن بين أعضائك بشكل دوري.
+
+🤝 كن سببًا في نشر الخير!
+
+شارك البوت مع أصدقائك، وأضفه إلى مجموعاتك وقنواتك، وادعُ الآخرين للاستفادة منه.
+
+فربما تكون رسالة واحدة سببًا في إحياء سنة، أو تذكير غافل، أو عمل صالح يستمر أثره.
+
+❤️ رِسالة... تذكيرٌ يصل، وخيرٌ ينتشر، وسُنّةٌ تُحيا"""
+
 
 def load_data():
     if os.path.exists(DB_FILE):
@@ -18,22 +50,28 @@ def load_data():
                 if isinstance(data.get("users"), list):
                     return {
                         "users": {},
-                        "welcome_msg": "وعليكم السلام ورحمة الله وبركاته 🌸\n\nحياك الله يا {name} في بوت **\"رِسالة\"** 📖✨\nنسأل الله أن يجعلنا وإياكم ممن يستمعون القول فيتبعون أحسنه، وأن يحيي قلوبنا بسنن الحبيب المصطفى ﷺ.\n\n🌱 **نصيحة وأجر دائم:**\n\"الدال على الخير كفاعله\".. ندعوك لمشاركة البوت ووضعه في قنواتك ومجموعاتك ومع أحبابك، لتنال أجر إحياء سنة من سنن الحبيب ﷺ ويكون لك مثل أجور كل من عمل بها بإذن الله.\n\n⚠️ **إبراء ذمة وتنبيه:**\nبشر نحن نخطئ ونسهو، ولسنا بمعصومين؛ فإن وجدتم خطأً إملائياً، أو التبس عليكم فهم حديث، فنرجو ألا تترددوا في إعلامنا فوراً لنصححه، فجزاكم الله عنا خيراً.\n\n💡 **نبذة عن البوت وكيفية العمل عليه:**\nهذا البوت وُجد ليكون رفيقك اليومي في إرسال السنن النبوية الصحيحة والثابتة بشكل منتظم:\n1️⃣ يمكنك تصفح الأحاديث يدوياً في أي وقت تشاء.\n2️⃣ يمكنك التحكم بفاصل وقت التذكير وتظبيطه بما يناسب وقتك.\n3️⃣ يمكنك ربط البوت بقناتك أو مجموعتك بكل سهولة عبر إرسال الرابط أو توجيه رسالة (Forward)، ليبدأ بنشر السنن أوتوماتيكياً وبكل سلاسة.\n\nاختر ما ترغب به من القائمة أدناه للبدء 👇",
+                        "welcome_msg": WELCOME_MESSAGE,
                         "app_file": None
                     }
+
+                if not data.get("welcome_msg"):
+                    data["welcome_msg"] = WELCOME_MESSAGE
+
                 return data
         except Exception:
             pass
-            
+
     return {
         "users": {},
-        "welcome_msg": "وعليكم السلام ورحمة الله وبركاته 🌸\n\nحياك الله يا {name} في بوت **\"رِسالة\"** 📖✨\nنسأل الله أن يجعلنا وإياكم ممن يستمعون القول فيتبعون أحسنه، وأن يحيي قلوبنا بسنن الحبيب المصطفى ﷺ.\n\n🌱 **نصيحة وأجر دائم:**\n\"الدال على الخير كفاعله\".. ندعوك لمشاركة البوت ووضعه في قنواتك ومجموعاتك ومع أحبابك، لتنال أجر إحياء سنة من سنن الحبيب ﷺ ويكون لك مثل أجور كل من عمل بها بإذن الله.\n\n⚠️ **إبراء ذمة وتنبيه:**\nبشر نحن نخطئ ونسهو، ولسنا بمعصومين؛ فإن وجدتم خطأً إملائياً، أو التبس عليكم فهم حديث، فنرجو ألا تترددوا في إعلامنا فوراً لنصححه، فجزاكم الله عنا خيراً.\n\n💡 **نبذة عن البوت وكيفية العمل عليه:**\nهذا البوت وُجد ليكون رفيقك اليومي في إرسال السنن النبوية الصحيحة والثابتة بشكل منتظم:\n1️⃣ يمكنك تصفح الأحاديث يدوياً في أي وقت تشاء.\n2️⃣ يمكنك التحكم بفاصل وقت التذكير وتظبيطه بما يناسب وقتك.\n3️⃣ يمكنك ربط البوت بقناتك أو مجموعتك بكل سهولة عبر إرسال الرابط أو توجيه رسالة (Forward)، ليبدأ بنشر السنن أوتوماتيكياً وبكل سلاسة.\n\nاختر ما ترغب به من القائمة أدناه للبدء 👇",
+        "welcome_msg": WELCOME_MESSAGE,
         "app_file": None
     }
+
 
 def save_data(data):
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+
 
 def load_sunnahs():
     if not os.path.exists(SUNNAH_FILE):
@@ -44,6 +82,7 @@ def load_sunnahs():
     except:
         return []
 
+
 def get_current_index():
     if not os.path.exists(PROGRESS_FILE):
         return 0
@@ -53,9 +92,11 @@ def get_current_index():
     except:
         return 0
 
+
 def save_current_index(index):
     with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
         json.dump({"index": index}, f)
+
 
 def format_sunnah_message(sunnah, index):
     raw_text = sunnah.get('text', '')
@@ -75,9 +116,11 @@ def format_sunnah_message(sunnah, index):
     )
     return text_body + f"\n\n(رسالة {index})"
 
+
 async def set_bot_commands(application):
     commands = [BotCommand("start", "Start Bot 🚀")]
     await application.bot.set_my_commands(commands)
+
 
 async def send_scheduled_sunnahs(context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
@@ -88,10 +131,10 @@ async def send_scheduled_sunnahs(context: ContextTypes.DEFAULT_TYPE):
     index = get_current_index()
     if index >= len(sunnahs):
         index = 0
-        
+
     chosen = sunnahs[index]
     formatted_msg = format_sunnah_message(chosen, index + 1)
-    
+
     save_current_index((index + 1) % len(sunnahs))
 
     for chat_id, user_info in data.get("users", {}).items():
@@ -110,15 +153,16 @@ async def send_scheduled_sunnahs(context: ContextTypes.DEFAULT_TYPE):
                     except Exception as e:
                         print(f"[ERROR] Failed to send to {target}: {e}")
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     user = update.effective_user
     chat_id = str(user.id)
     data = load_data()
-    
+
     if chat_id not in data["users"]:
         data["users"][chat_id] = {
-            "name": user.first_name, 
+            "name": user.first_name,
             "interval": 10,
             "sources": {
                 "private": {"name": "المحادثة الخاصة", "type": "private", "status": "active"}
@@ -135,17 +179,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📱 تحميل التطبيق", callback_data="app")],
         [InlineKeyboardButton("📞 تواصل معنا", url=f"tg://user?id={ADMIN_ID}")]
     ]
-    
+
     if user.id == ADMIN_ID:
         keyboard.append([InlineKeyboardButton("⚙️ إعدادات المالك", callback_data="admin_panel")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    template = data.get("welcome_msg", "مرحباً بك يا {name} 👋")
+    template = data.get("welcome_msg", WELCOME_MESSAGE)
     welcome_text = template.replace("{name}", user.first_name)
-    
+
     await update.message.reply_text(welcome_text, reply_markup=reply_markup)
     rm_msg = await update.message.reply_text("OK", reply_markup=ReplyKeyboardRemove())
     await context.bot.delete_message(chat_id=chat_id, message_id=rm_msg.message_id)
+
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -153,21 +198,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = str(user.id)
     data = load_data()
-    
+
     if query.data == "next_sunnah":
         sunnahs = load_sunnahs()
         if not sunnahs:
             await query.answer("⚠️ ملف الأحاديث غير موجود أو فارغ!", show_alert=True)
             return
-            
+
         index = get_current_index()
         if index >= len(sunnahs):
             index = 0
-        
+
         chosen = sunnahs[index]
         formatted_msg = format_sunnah_message(chosen, index + 1)
         save_current_index((index + 1) % len(sunnahs))
-        
+
         keyboard = [
             [InlineKeyboardButton("📖 حديث جديد (التالي)", callback_data="next_sunnah")],
             [InlineKeyboardButton("⏱️ تعديل وقت التذكير", callback_data="set_time")],
@@ -179,12 +224,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         if user.id == ADMIN_ID:
             keyboard.append([InlineKeyboardButton("⚙️ إعدادات المالك", callback_data="admin_panel")])
-            
+
         try:
             await query.edit_message_text(text=formatted_msg, reply_markup=InlineKeyboardMarkup(keyboard))
         except Exception:
             await query.answer("تم عرض الحديث بالفعل أو حدث تحديث", show_alert=False)
-            
+
     elif query.data == "about":
         text = (
             "📖 **عن بوت رِسالة:**\n\n"
@@ -194,7 +239,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         keyboard = [[InlineKeyboardButton("🔙 الرجوع للقائمة الرئيسية", callback_data="main_menu")]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-        
+
     elif query.data == "set_time":
         text = "⏱️ **اختر وقت التذكير المناسب لك:**\nحدد الفاصل الزمني لإرسال التذكيرات والسنن:"
         keyboard = [
@@ -212,7 +257,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if chat_id in data["users"]:
             data["users"][chat_id]["interval"] = minutes
             save_data(data)
-            
+
         text = f"✅ تم حفظ الوقت بنجاح ({minutes} دقيقة)! وسيتم إرسال التذكيرات بالفاصل الزمني الجديد."
         keyboard = [[InlineKeyboardButton("🔙 الرجوع للقائمة الرئيسية", callback_data="main_menu")]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
@@ -260,7 +305,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         p_status = data["users"].get(chat_id, {}).get("sources", {}).get("private", {}).get("status", "active")
         status_text = "🟢 مفعل (يعمل)" if p_status == "active" else "🔴 متوقف"
         toggle_btn_text = "🔴 إيقاف البوت" if p_status == "active" else "🟢 تشغيل البوت"
-        
+
         text = f"💬 **المحادثة الخاصة:**\n• الحالة الحالية: {status_text}"
         keyboard = [
             [InlineKeyboardButton(toggle_btn_text, callback_data="toggle_private")],
@@ -273,11 +318,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             curr = data["users"][chat_id]["sources"]["private"]["status"]
             data["users"][chat_id]["sources"]["private"]["status"] = "inactive" if curr == "active" else "active"
             save_data(data)
-        
+
         p_status = data["users"].get(chat_id, {}).get("sources", {}).get("private", {}).get("status", "active")
         status_text = "🟢 مفعل (يعمل)" if p_status == "active" else "🔴 متوقف"
         toggle_btn_text = "🔴 إيقاف البوت" if p_status == "active" else "🟢 تشغيل البوت"
-        
+
         text = f"✅ **تم تحديث الحالة بنجاح!**\n\n💬 **المحادثة الخاصة:**\n• الحالة الحالية: {status_text}"
         keyboard = [
             [InlineKeyboardButton(toggle_btn_text, callback_data="toggle_private")],
@@ -288,7 +333,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data in ["ctrl_groups", "ctrl_channels"]:
         st_type = "group" if query.data == "ctrl_groups" else "channel"
         user_sources = data["users"].get(chat_id, {}).get("sources", {})
-        
+
         keyboard = []
         for s_id, s_info in user_sources.items():
             if s_info.get("type") == st_type:
@@ -298,10 +343,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     InlineKeyboardButton(f"{s_name} {status_icon}", callback_data=f"toggle_{s_id}"),
                     InlineKeyboardButton("🗑️ حذف", callback_data=f"del_{s_id}")
                 ])
-        
+
         if not keyboard:
             keyboard.append([InlineKeyboardButton("لا توجد مصادر مضافة بعد", callback_data="control_panel")])
-            
+
         keyboard.append([InlineKeyboardButton("🔙 الرجوع للتحكم", callback_data="control_panel")])
         title = "👥 **إدارة المجموعات:**" if st_type == "group" else "📢 **إدارة القنوات:**"
         await query.edit_message_text(f"{title}\nيمكنك التبديل بين تشغيل/إيقاف أو الحذف:", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -313,7 +358,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             new_status = "inactive" if current_status == "active" else "active"
             data["users"][chat_id]["sources"][s_id]["status"] = new_status
             save_data(data)
-            
+
         text = "✅ تم تحديث حالة المصدر بنجاح!"
         keyboard = [[InlineKeyboardButton("🔙 الرجوع للتحكم", callback_data="control_panel")]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
@@ -323,7 +368,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if chat_id in data["users"] and s_id in data["users"][chat_id]["sources"]:
             del data["users"][chat_id]["sources"][s_id]
             save_data(data)
-            
+
         text = "🗑️ تم إزالة وحذف المصدر بنجاح!"
         keyboard = [[InlineKeyboardButton("🔙 الرجوع للتحكم", callback_data="control_panel")]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
@@ -398,17 +443,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         if user.id == ADMIN_ID:
             keyboard.append([InlineKeyboardButton("⚙️ إعدادات المالك", callback_data="admin_panel")])
-            
-        template = data.get("welcome_msg", "مرحباً بك يا {name} 👋")
+
+        template = data.get("welcome_msg", WELCOME_MESSAGE)
         welcome_text = template.replace("{name}", user.first_name)
         await query.edit_message_text(f"{welcome_text}\n\nالقائمة الرئيسية:", reply_markup=InlineKeyboardMarkup(keyboard))
+
 
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = str(user.id)
     text = update.message.text or update.message.caption or ""
     data = load_data()
-    
+
     # 1. معالجة الرسالة المحولة (Forward) من القنوات والمجموعات
     if update.message.forward_from_chat:
         f_chat = update.message.forward_from_chat
@@ -416,7 +462,7 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
         target_name = f"@{f_chat.username}" if f_chat.username else f_id
         f_title = f_chat.title or target_name
         f_type = "channel" if f_chat.type == "channel" else "group"
-        
+
         source_id = "src_" + str(len(data["users"].get(chat_id, {}).get("sources", {})) + 1)
         if chat_id in data["users"]:
             data["users"][chat_id]["sources"][source_id] = {
@@ -426,7 +472,7 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
                 "status": "active"
             }
             save_data(data)
-            
+
         await update.message.reply_text(
             f"✅ تم ربط الـ {f_type} بنجاح عبر التوجيه!\n"
             f"الاسم: `{f_title}`\n"
@@ -439,7 +485,7 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
     if context.user_data.get("waiting_source_type"):
         st_type = context.user_data["waiting_source_type"]
         context.user_data.clear()
-        
+
         target_input = text.strip()
         if "t.me/" in target_input:
             target_input = "@" + target_input.rstrip("/").split("/")[-1]
@@ -455,7 +501,7 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
                 "status": "active"
             }
             save_data(data)
-            
+
         await update.message.reply_text(
             f"✅ تم إضافة القناة/المجموعة بنجاح من خلال الرابط:\n`{target_input}`\n\n"
             f"📌 تأكد أن البوت مشرف (Admin) في القناة/المجموعة."
@@ -469,12 +515,13 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
             context.user_data.clear()
             await update.message.reply_text("✅ تم تحديث رسالة الترحيب بنجاح!")
             return
-            
+
         if context.user_data.get("waiting_broadcast"):
             bc_type = context.user_data["waiting_broadcast"]
             context.user_data.clear()
             await update.message.reply_text(f"🚀 جاري بدء الإذاعة ({bc_type}) بنجاح للمستخدمين...")
             return
+
 
 async def handle_admin_documents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -489,9 +536,10 @@ async def handle_admin_documents(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text("✅ تم حفظ ملف التطبيق وربطه بزر التحميل بنجاح!")
         return
 
+
 def main():
     application = Application.builder().token(TOKEN).post_init(set_bot_commands).build()
-    
+
     job_queue = application.job_queue
     job_queue.run_repeating(send_scheduled_sunnahs, interval=600, first=10)
 
@@ -500,9 +548,10 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_messages))
     application.add_handler(MessageHandler(filters.FORWARDED, handle_user_messages))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_admin_documents))
-    
+
     print("Bot Resala is running with fixed crash & updates...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
+
 
 if __name__ == "__main__":
     main()
