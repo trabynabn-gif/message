@@ -1,4 +1,4 @@
-"""Railway entry point with reliable channel/group linking and message delivery."""
+"""Railway entry point with channel linking and scheduled delivery fixes."""
 
 import os
 import re
@@ -36,8 +36,7 @@ def _save_source(user, chat, source_type):
     data = bot.load_data()
     users = data.setdefault("users", {})
     user_data = users.setdefault(
-        str(user.id),
-        {"name": user.first_name, "interval": 1440, "sources": {}},
+        str(user.id), {"name": user.first_name, "interval": 1440, "sources": {}}
     )
     sources = user_data.setdefault("sources", {})
     chat_id = str(chat.id)
@@ -63,7 +62,7 @@ async def handle_user_messages(update, context):
         return
 
     origin = getattr(message, "forward_origin", None)
-    source_chat = getattr(origin, "chat", None)
+    source_chat = getattr(origin, "chat", None) or getattr(origin, "sender_chat", None)
     if source_chat is None:
         source_chat = getattr(message, "forward_from_chat", None)
     chat_type = getattr(source_chat, "type", None)
@@ -86,7 +85,7 @@ async def handle_user_messages(update, context):
         if username is None:
             await message.reply_text(
                 "أرسل رابطًا عامًا بصيغة https://t.me/username أو @username. "
-                "رابط الدعوة الخاص لا يكفي وحده للربط."
+                "روابط الدعوة الخاصة لا تكفي وحدها للربط."
             )
             return
         try:
@@ -94,10 +93,9 @@ async def handle_user_messages(update, context):
         except Exception as exc:
             print(f"[LINK] Failed resolving @{username}: {exc}")
             await message.reply_text(
-                "تعذّر الوصول للرابط. تحقق من اسم المستخدم، وأضف البوت إلى القناة/المجموعة."
+                "تعذّر الوصول للرابط. تحقق من اسم المستخدم وأضف البوت إلى القناة/المجموعة."
             )
             return
-
         actual_type = getattr(chat, "type", None)
         if actual_type not in ("channel", "group", "supergroup"):
             await message.reply_text("الرابط لا يشير إلى قناة أو مجموعة.")
@@ -106,14 +104,13 @@ async def handle_user_messages(update, context):
         if actual_source_type != waiting_type:
             await message.reply_text("نوع الرابط لا يطابق اختيارك؛ اختر النوع الصحيح وأعد الإرسال.")
             return
-
         _save_source(user, chat, actual_source_type)
         context.user_data.pop("waiting_source_type", None)
         await message.reply_text(
             f"✅ تم ربط {('القناة' if actual_source_type == 'channel' else 'المجموعة')}!\n"
             f"الاسم: {chat.title or chat.username or username}\n"
             f"المعرّف: {chat.id}\n"
-            "سيبدأ الإرسال الدوري إذا كان البوت مضافًا وله صلاحية النشر."
+            "تأكد أن البوت مضاف ولديه صلاحية النشر."
         )
         return
 
@@ -127,10 +124,9 @@ async def send_scheduled_sunnahs(context):
         print("[SCHEDULE] No sunnah data loaded; nothing to send.")
         return
     index = bot.get_current_index()
-    if not isinstance(index, int) or index < 0 or index >= len(sunnahs):
+    if not isinstance(index, int) or not 0 <= index < len(sunnahs):
         index = 0
     text = bot.format_sunnah_message(sunnahs[index], index + 1)
-    bot.save_current_index((index + 1) % len(sunnahs))
 
     for user_id, user_info in data.get("users", {}).items():
         for source in user_info.get("sources", {}).values():
@@ -158,11 +154,13 @@ async def send_scheduled_sunnahs(context):
             except Exception as exc:
                 print(f"[SCHEDULE] Failed to send to {target}: {exc}")
 
+    bot.save_current_index((index + 1) % len(sunnahs))
+
 
 def main():
     token = (os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("BOT_TOKEN") or "").strip()
     if not token:
-        raise RuntimeError("Set TELEGRAM_BOT_TOKEN in Railway Variables.")
+        raise RuntimeError("Missing token: set TELEGRAM_BOT_TOKEN in Railway Variables.")
     bot.TOKEN = token
     admin_id = (os.environ.get("ADMIN_ID") or "").strip()
     if admin_id:
