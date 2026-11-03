@@ -164,8 +164,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = template.replace("{name}", user.first_name)  
       
     await update.message.reply_text(welcome_text, reply_markup=reply_markup)  
-    rm_msg = await update.message.reply_text("OK", reply_markup=ReplyKeyboardRemove())  
-    await context.bot.delete_message(chat_id=chat_id, message_id=rm_msg.message_id)
+    try:
+        rm_msg = await update.message.reply_text("OK", reply_markup=ReplyKeyboardRemove())
+        await context.bot.delete_message(chat_id=chat_id, message_id=rm_msg.message_id)
+    except:
+        pass
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -210,7 +213,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📖 **عن بوت رِسالة:**\n\n"  
             "الحياة السريعة أهلت الكثير من السنن النبوية العظيمة التي كان يحرص عليها النبي ﷺ في يومه وليلته، فأصبحت منسية أو مهجورة بين الناس.\n\n"  
             "💡 **فكرة البوت:**\n"  
-            "هذا المشروع وُجد ليكون رفيقك اليومي ومذكرك الدائم. يقوم البوت بإرسال سنن نبوية صحيحة وثابتة بشكل منتظم."  
+            "هذا المشروع وُجد ليكون رفيقك اليومي ومذكرك الدائم. يقوم البوت بإرسال سنن نبوية صحيحة والثابتة بشكل منتظم."  
         )  
         keyboard = [[InlineKeyboardButton("🔙 الرجوع للقائمة الرئيسية", callback_data="main_menu")]]  
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))  
@@ -249,13 +252,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "src_group":  
         context.user_data["waiting_source_type"] = "group"  
-        text = "📌 **ربط مجموعة:**\nأرسل الآن رابط مجموعتك أو قم بتوجيه رسالة (Forward) من المجموعة هنا، وسيقوم البوت بجلب المعرف وربطها تلقائياً."  
+        text = "📌 **ربط مجموعة:**\nأرسل الآن رابط مجموعتك أو معرفها (مثل @username) أو قم بتوجيه رسالة (Forward) هنا."  
         keyboard = [[InlineKeyboardButton("🔙 الرجوع", callback_data="sources")]]  
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))  
 
     elif query.data == "src_channel":  
         context.user_data["waiting_source_type"] = "channel"  
-        text = "📌 **ربط قناة:**\nأرسل الآن رابط قناتك أو قم بتوجيه رسالة (Forward) من القناة هنا، وسيقوم البوت بجلب المعرف وربطها تلقائياً."  
+        text = "📌 **ربط قناة:**\nأرسل الآن رابط قناتك أو معرفها (مثل @username) أو قم بتوجيه رسالة (Forward) هنا."  
         keyboard = [[InlineKeyboardButton("🔙 الرجوع", callback_data="sources")]]  
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))  
 
@@ -425,26 +428,30 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    if not user or not update.message:
+        return
     chat_id = str(user.id)
     text = update.message.text or update.message.caption or ""
     data = load_data()
 
-    if user.id == ADMIN_ID:  
-        if context.user_data.get("waiting_welcome"):  
-            data["welcome_msg"] = text  
-            save_data(data)  
-            context.user_data.clear()  
-            await update.message.reply_text("✅ تم تحديث رسالة الترحيب بنجاح!")  
-            return  
-              
-        if context.user_data.get("waiting_broadcast"):  
-            bc_type = context.user_data["waiting_broadcast"]  
-            context.user_data.clear()  
-            await update.message.reply_text(f"🚀 جاري بدء الإذاعة ({bc_type}) بنجاح للمستخدمين...")  
-            return
+    # 1. معالجة تعديل رسالة الترحيب للأدمن
+    if user.id == ADMIN_ID and context.user_data.get("waiting_welcome"):  
+        data["welcome_msg"] = text  
+        save_data(data)  
+        context.user_data.clear()  
+        await update.message.reply_text("✅ تم تحديث رسالة الترحيب بنجاح!")  
+        return  
 
-    if update.message.forward_from_chat:  
-        f_chat = update.message.forward_from_chat  
+    # 2. معالجة الإذاعة للأدمن
+    if user.id == ADMIN_ID and context.user_data.get("waiting_broadcast"):  
+        bc_type = context.user_data["waiting_broadcast"]  
+        context.user_data.clear()  
+        await update.message.reply_text(f"🚀 جاري بدء الإذاعة ({bc_type}) بنجاح للمستخدمين...")  
+        return
+
+    # 3. معالجة الرسالة المحولة (Forward)
+    if update.message.forward_from_chat or (update.message.forward_origin and hasattr(update.message.forward_origin, 'chat')):  
+        f_chat = update.message.forward_from_chat or update.message.forward_origin.chat
         f_id = str(f_chat.id)  
         target_name = f"@{f_chat.username}" if f_chat.username else f_id  
         f_title = f_chat.title or target_name  
@@ -463,11 +470,11 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(  
             f"✅ تم ربط الـ {f_type} بنجاح عبر التوجيه!\n"  
             f"الاسم: `{f_title}`\n"  
-            f"المعرف: `{target_name}`\n\n"  
-            f"📌 تأكد أن البوت مشرف (Admin) في القناة/المجموعة."  
+            f"المعرف: `{target_name}`"  
         )  
         return  
 
+    # 4. معالجة إرسال الرابط المباشر أو المعرف للقنوات والمجموعات
     if context.user_data.get("waiting_source_type"):  
         st_type = context.user_data["waiting_source_type"]  
         context.user_data.clear()  
@@ -478,21 +485,28 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
         elif not target_input.startswith("@") and not target_input.startswith("-"):  
             target_input = "@" + target_input  
 
+        try:
+            chat_obj = await context.bot.get_chat(target_input)
+            target_id = str(chat_obj.id)
+            target_title = chat_obj.title or target_input
+            target_username = f"@{chat_obj.username}" if chat_obj.username else target_id
+        except Exception:
+            target_id = target_input
+            target_title = target_input
+            target_username = target_input
+
         source_id = "src_" + str(len(data["users"].get(chat_id, {}).get("sources", {})) + 1)  
         if chat_id in data["users"]:  
             data["users"][chat_id]["sources"][source_id] = {  
-                "name": target_input,  
-                "title": target_input,  
+                "name": target_username,  
+                "title": target_title,  
                 "type": st_type,  
                 "status": "active"  
             }  
             save_data(data)  
               
-        await update.message.reply_text(  
-            f"✅ تم إضافة القناة/المجموعة بنجاح من خلال الرابط:\n`{target_input}`\n\n"  
-            f"📌 تأكد أن البوت مشرف (Admin) في القناة/المجموعة."  
-        )  
-        return  
+        await update.message.reply_text(f"✅ تم إضافة القناة/المجموعة بنجاح:\n`{target_title}`")  
+        return
 
 async def handle_admin_documents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -519,7 +533,7 @@ def main():
     application.add_handler(MessageHandler(filters.FORWARDED, handle_user_messages))  
     application.add_handler(MessageHandler(filters.Document.ALL, handle_admin_documents))  
       
-    print("Bot Resala is running with fixed crash & updates...")  
+    print("Bot Resala is running with fixed channel links handler...")  
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
