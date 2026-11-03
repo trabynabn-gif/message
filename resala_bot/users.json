@@ -1,0 +1,33 @@
+{
+    "users": {
+        "1520960859": {
+            "name": "ابن_ترابين🇪🇬⃤⃤",
+            "interval": 10,
+            "sources": {
+                "private": {
+                    "name": "المحادثة الخاصة",
+                    "type": "private",
+                    "status": "active"
+                },
+                "src_2": {
+                    "name": "https://t.me/ofuhvfjnh",
+                    "type": "channel",
+                    "status": "active"
+                }
+            }
+        },
+        "5712768184": {
+            "name": "Dr. Mahmoud",
+            "interval": 1440,
+            "sources": {
+                "private": {
+                    "name": "المحادثة الخاصة",
+                    "type": "private",
+                    "status": "inactive"
+                }
+            }
+        }
+    },
+    "welcome_msg": "مرحباً بك يا {name} 👋\n\nأهلاً بك في بوت رسالة لإحياء السنن النبوية.\n\nاختر ما تحب من القائمة أدناه:",
+    "app_file": null
+}
