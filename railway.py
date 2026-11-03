@@ -149,11 +149,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = template.replace("{name}", user.first_name)
     
     await update.message.reply_text(welcome_text, reply_markup=reply_markup)
-    try:
-        rm_msg = await update.message.reply_text("OK", reply_markup=ReplyKeyboardRemove())
-        await context.bot.delete_message(chat_id=chat_id, message_id=rm_msg.message_id)
-    except:
-        pass
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -413,16 +408,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    if not user or not update.message:
+        return
     chat_id = str(user.id)
     text = update.message.text or update.message.caption or ""
     data = load_data()
     
-    # 1. استقبال وتعديل رسالة الترحيب من الأدمن
+    # 1. استقبال وتعديل رسالة الترحيب من الأدمن (أول شرط يتم فحصه)
     if user.id == ADMIN_ID and context.user_data.get("waiting_welcome"):
         data["welcome_msg"] = text
         save_data(data)
         context.user_data.clear()
-        await update.message.reply_text("✅ تم تحديث وحفظ رسالة الترحيب بنجاح يا صاحب البوت! يمكنك الآن الضغط على /start لرؤيتها.")
+        await update.message.reply_text("✅ تم تحديث وحفظ رسالة الترحيب بنجاح يا صاحب البوت! اضغط /start لرؤيتها.")
         return
 
     # 2. استقبال الإذاعة من الأدمن
@@ -432,7 +429,7 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(f"🚀 جاري بدء الإذاعة ({bc_type}) بنجاح للمستخدمين...")
         return
 
-    # 3. معالجة الرسالة المحولة (Forward) من القنوات والمجموعات
+    # 3. معالجة الرسالة المحولة (Forward)
     if update.message.forward_from_chat or (update.message.forward_origin and hasattr(update.message.forward_origin, 'chat')):
         f_chat = update.message.forward_from_chat or update.message.forward_origin.chat
         f_id = str(f_chat.id)
@@ -453,12 +450,11 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(
             f"✅ تم ربط الـ {f_type} بنجاح عبر التوجيه!\n"
             f"الاسم: `{f_title}`\n"
-            f"المعرف: `{target_name}`\n\n"
-            f"📌 تأكد أن البوت مشرف (Admin) في القناة/المجموعة."
+            f"المعرف: `{target_name}`"
         )
         return
 
-    # 4. معالجة إرسال الرابط المباشر أو المعرف للمصادر
+    # 4. معالجة إرسال الرابط المباشر
     if context.user_data.get("waiting_source_type"):
         st_type = context.user_data["waiting_source_type"]
         context.user_data.clear()
@@ -489,23 +485,7 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
             }
             save_data(data)
             
-        await update.message.reply_text(
-            f"✅ تم إضافة القناة/المجموعة بنجاح:\n`{target_title}`\n\n"
-            f"📌 تأكد أن البوت مشرف (Admin) في القناة/المجموعة."
-        )
-        return
-
-async def handle_admin_documents(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if user.id != ADMIN_ID:
-        return
-    data = load_data()
-    if context.user_data.get("waiting_app_file") and update.message.document:
-        file_id = update.message.document.file_id
-        data["app_file"] = file_id
-        save_data(data)
-        context.user_data.clear()
-        await update.message.reply_text("✅ تم حفظ ملف التطبيق وربطه بزر التحميل بنجاح!")
+        await update.message.reply_text(f"✅ تم إضافة القناة/المجموعة بنجاح:\n`{target_title}`")
         return
 
 def main():
@@ -522,9 +502,8 @@ def main():
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_messages))
     application.add_handler(MessageHandler(filters.FORWARDED, handle_user_messages))
-    application.add_handler(MessageHandler(filters.Document.ALL, handle_admin_documents))
     
-    print("Bot Resala is running successfully on Railway with full features...")
+    print("Bot Resala is running successfully with direct welcome text capture...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
