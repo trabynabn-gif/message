@@ -5,9 +5,8 @@ import re
 
 import bot
 
-# Keep the original handler before replacing it. The original handler processes
-# the bot's other message flows; calling bot.handle_user_messages after the
-# replacement would recursively call this wrapper.
+# Preserve the original handler so regular/admin messages are delegated without
+# recursion after installing this wrapper.
 _original_handle_user_messages = bot.handle_user_messages
 
 
@@ -22,7 +21,6 @@ def _public_username(text):
     value = (text or "").strip().rstrip(".,!?;:)>]")
     if re.fullmatch(r"@[A-Za-z0-9_]{5,32}", value):
         return value[1:]
-
     match = re.search(
         r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me)/([^\s/?#]+)",
         value,
@@ -30,7 +28,6 @@ def _public_username(text):
     )
     if not match:
         return None
-
     username = match.group(1).strip(".,!?;:)>]")
     if username.startswith("+") or username.lower() in {"joinchat", "c"}:
         return None
@@ -47,13 +44,11 @@ def _save_source(user, chat, source_type):
     sources = user_data.setdefault("sources", {})
     chat_id = str(chat.id)
     title = chat.title or chat.username or chat_id
-
     for source in sources.values():
         if str(source.get("name")) == chat_id:
             source.update(name=chat_id, title=title, type=source_type, status="active")
             bot.save_data(data)
             return
-
     sources[_next_source_id(sources)] = {
         "name": chat_id,
         "title": title,
@@ -69,14 +64,12 @@ async def handle_user_messages(update, context):
     if message is None or user is None:
         return
 
-    # Telegram's current API reports channel forwards through forward_origin;
-    # retain support for older updates exposing forward_from_chat.
     origin = getattr(message, "forward_origin", None)
     source_chat = getattr(origin, "chat", None)
     if source_chat is None:
         source_chat = getattr(message, "forward_from_chat", None)
-
     chat_type = getattr(source_chat, "type", None)
+
     if source_chat is not None and chat_type in ("channel", "group", "supergroup"):
         source_type = "channel" if chat_type == "channel" else "group"
         _save_source(user, source_chat, source_type)
@@ -98,9 +91,7 @@ async def handle_user_messages(update, context):
                 "روابط الدعوة الخاصة لا تحتوي على معرّف يمكن للبوت استخدامه."
             )
             return
-
         try:
-            # Resolve the username and store Telegram's actual numeric chat ID.
             chat = await context.bot.get_chat(f"@{username}")
         except Exception as exc:
             print(f"[LINK] Could not resolve @{username}: {exc}")
@@ -114,7 +105,6 @@ async def handle_user_messages(update, context):
         if actual_type not in ("channel", "group", "supergroup"):
             await message.reply_text("الرابط لا يشير إلى قناة أو مجموعة Telegram.")
             return
-
         actual_source_type = "channel" if actual_type == "channel" else "group"
         if actual_source_type != waiting_type:
             await message.reply_text(
@@ -122,7 +112,6 @@ async def handle_user_messages(update, context):
                 "اختر النوع الصحيح ثم أرسل الرابط مرة أخرى."
             )
             return
-
         _save_source(user, chat, actual_source_type)
         context.user_data.pop("waiting_source_type", None)
         await message.reply_text(
@@ -133,23 +122,23 @@ async def handle_user_messages(update, context):
         )
         return
 
-    # Preserve the bot's original handlers without recursion.
+    # This includes the existing admin welcome-message editing flow.
     await _original_handle_user_messages(update, context)
 
 
 def main():
-    # The token used by bot.main() must come from Railway, not the value
-    # embedded in bot.py. Support both common variable names.
-    token = (
-        os.environ.get("TELEGRAM_BOT_TOKEN")
-        or os.environ.get("BOT_TOKEN")
-        or ""
-    ).strip()
+    token = (os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("BOT_TOKEN") or "").strip()
     if not token:
-        raise RuntimeError(
-            "Missing Telegram token: set TELEGRAM_BOT_TOKEN (or BOT_TOKEN) in Railway Variables."
-        )
+        raise RuntimeError("Set TELEGRAM_BOT_TOKEN in Railway Variables.")
     bot.TOKEN = token
+
+    admin_id = (os.environ.get("ADMIN_ID") or "").strip()
+    if admin_id:
+        try:
+            bot.ADMIN_ID = int(admin_id)
+        except ValueError as exc:
+            raise RuntimeError("ADMIN_ID must be your numeric Telegram user ID.") from exc
+
     bot.main()
 
 

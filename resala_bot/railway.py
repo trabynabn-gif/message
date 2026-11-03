@@ -1,5 +1,6 @@
-"""Railway entry point with channel/group linking fixes."""
+"""Railway entry point for deployments using resala_bot/ as the root."""
 
+import os
 import re
 
 import bot
@@ -41,13 +42,11 @@ def _save_source(user, chat, source_type):
     sources = user_data.setdefault("sources", {})
     chat_id = str(chat.id)
     title = chat.title or chat.username or chat_id
-
     for source in sources.values():
         if str(source.get("name")) == chat_id:
             source.update(name=chat_id, title=title, type=source_type, status="active")
             bot.save_data(data)
             return
-
     sources[_next_source_id(sources)] = {
         "name": chat_id,
         "title": title,
@@ -67,8 +66,8 @@ async def handle_user_messages(update, context):
     source_chat = getattr(origin, "chat", None)
     if source_chat is None:
         source_chat = getattr(message, "forward_from_chat", None)
-
     chat_type = getattr(source_chat, "type", None)
+
     if source_chat is not None and chat_type in ("channel", "group", "supergroup"):
         source_type = "channel" if chat_type == "channel" else "group"
         _save_source(user, source_chat, source_type)
@@ -83,7 +82,7 @@ async def handle_user_messages(update, context):
     waiting_type = context.user_data.get("waiting_source_type")
     if waiting_type in ("channel", "group"):
         username = _public_username(message.text or "")
-        if not username:
+        if username is None:
             await message.reply_text(
                 "أرسل رابطًا عامًا بصيغة https://t.me/username أو @username. "
                 "روابط الدعوة الخاصة لا يمكن تحويلها إلى معرّف تلقائيًا."
@@ -97,7 +96,6 @@ async def handle_user_messages(update, context):
                 "تعذر الوصول للرابط. تأكد من صحة اسم المستخدم وأن البوت مضاف للقناة/المجموعة."
             )
             return
-
         actual_type = getattr(chat, "type", None)
         if actual_type not in ("channel", "group", "supergroup"):
             await message.reply_text("الرابط لا يشير إلى قناة أو مجموعة.")
@@ -106,7 +104,6 @@ async def handle_user_messages(update, context):
         if actual_source_type != waiting_type:
             await message.reply_text("نوع الرابط لا يطابق الاختيار. اختر النوع الصحيح وحاول مرة أخرى.")
             return
-
         _save_source(user, chat, actual_source_type)
         context.user_data.pop("waiting_source_type", None)
         await message.reply_text(
@@ -120,7 +117,21 @@ async def handle_user_messages(update, context):
     await _original_handle_user_messages(update, context)
 
 
+def main():
+    token = (os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("BOT_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError("Set TELEGRAM_BOT_TOKEN in Railway Variables.")
+    bot.TOKEN = token
+    admin_id = (os.environ.get("ADMIN_ID") or "").strip()
+    if admin_id:
+        try:
+            bot.ADMIN_ID = int(admin_id)
+        except ValueError as exc:
+            raise RuntimeError("ADMIN_ID must be your numeric Telegram user ID.") from exc
+    bot.main()
+
+
 bot.handle_user_messages = handle_user_messages
 
 if __name__ == "__main__":
-    bot.main()
+    main()
