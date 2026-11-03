@@ -4,7 +4,9 @@ import os
 import re
 
 import bot
+from persistent_storage import install as install_persistent_storage
 
+install_persistent_storage(bot)
 _original_handle_user_messages = bot.handle_user_messages
 
 
@@ -32,7 +34,7 @@ def _public_username(text):
     return username if re.fullmatch(r"[A-Za-z0-9_]{5,32}", username) else None
 
 
-def _store_source(user, chat, source_type):
+def _save_source(user, chat, source_type):
     data = bot.load_data()
     users = data.setdefault("users", {})
     user_data = users.setdefault(
@@ -47,10 +49,7 @@ def _store_source(user, chat, source_type):
             bot.save_data(data)
             return
     sources[_next_source_id(sources)] = {
-        "name": chat_id,
-        "title": title,
-        "type": source_type,
-        "status": "active",
+        "name": chat_id, "title": title, "type": source_type, "status": "active"
     }
     bot.save_data(data)
 
@@ -66,15 +65,15 @@ async def handle_user_messages(update, context):
     if source_chat is None:
         source_chat = getattr(message, "forward_from_chat", None)
     chat_type = getattr(source_chat, "type", None)
-
     if source_chat is not None and chat_type in ("channel", "group", "supergroup"):
         source_type = "channel" if chat_type == "channel" else "group"
-        _store_source(user, source_chat, source_type)
+        _save_source(user, source_chat, source_type)
         context.user_data.pop("waiting_source_type", None)
         await message.reply_text(
             f"✅ تم ربط الـ {source_type} بنجاح!\n"
             f"الاسم: {source_chat.title or source_chat.username or source_chat.id}\n"
-            f"المعرّف: {source_chat.id}"
+            f"المعرّف: {source_chat.id}\n"
+            "تأكد من إضافة البوت ومنحه صلاحية النشر."
         )
         return
 
@@ -84,7 +83,7 @@ async def handle_user_messages(update, context):
         if username is None:
             await message.reply_text(
                 "أرسل رابطًا عامًا بصيغة https://t.me/username أو @username. "
-                "روابط الدعوة الخاصة لا تكفي وحدها للربط."
+                "رابط الدعوة الخاصة لا يكفي وحده للربط."
             )
             return
         try:
@@ -92,7 +91,7 @@ async def handle_user_messages(update, context):
         except Exception as exc:
             print(f"[LINK] Failed resolving @{username}: {exc}")
             await message.reply_text(
-                "تعذّر الوصول للرابط. تحقق من اسم المستخدم وأضف البوت إلى القناة/المجموعة."
+                "تعذّر الوصول للرابط. تحقق من الاسم وأضف البوت إلى القناة/المجموعة."
             )
             return
         actual_type = getattr(chat, "type", None)
@@ -103,17 +102,17 @@ async def handle_user_messages(update, context):
         if actual_source_type != waiting_type:
             await message.reply_text("نوع الرابط لا يطابق اختيارك؛ اختر النوع الصحيح وأعد الإرسال.")
             return
-        _store_source(user, chat, actual_source_type)
+        _save_source(user, chat, actual_source_type)
         context.user_data.pop("waiting_source_type", None)
         await message.reply_text(
             f"✅ تم ربط {('القناة' if actual_source_type == 'channel' else 'المجموعة')}!\n"
             f"الاسم: {chat.title or chat.username or username}\n"
             f"المعرّف: {chat.id}\n"
-            "تأكد من إضافة البوت ومنحه صلاحية النشر."
+            "تأكد أن البوت مضاف ولديه صلاحية النشر."
         )
         return
 
-    # Preserve the built-in admin welcome-message editing flow.
+    # Preserve the built-in admin welcome-message editing and other workflows.
     await _original_handle_user_messages(update, context)
 
 
