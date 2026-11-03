@@ -1,5 +1,6 @@
 """Railway entry point with channel/group linking fixes."""
 
+import os
 import re
 
 import bot
@@ -136,7 +137,23 @@ async def handle_user_messages(update, context):
     await _original_handle_user_messages(update, context)
 
 
+def main():
+    # The token used by bot.main() must come from Railway, not the value
+    # embedded in bot.py. Support both common variable names.
+    token = (
+        os.environ.get("TELEGRAM_BOT_TOKEN")
+        or os.environ.get("BOT_TOKEN")
+        or ""
+    ).strip()
+    if not token:
+        raise RuntimeError(
+            "Missing Telegram token: set TELEGRAM_BOT_TOKEN (or BOT_TOKEN) in Railway Variables."
+        )
+    bot.TOKEN = token
+    bot.main()
+
+
 bot.handle_user_messages = handle_user_messages
 
 if __name__ == "__main__":
-    bot.main()
+    main()
