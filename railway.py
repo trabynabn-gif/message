@@ -1,4 +1,4 @@
-"""Railway entry point: use durable storage and preserve all bot message flows."""
+"""Railway entry point: durable storage, source linking, and admin message flows."""
 
 import os
 import re
@@ -52,13 +52,91 @@ def _save_source(user, chat, source_type):
     bot.save_data(data)
 
 
+def _delivery_target(user_id, source):
+    source_type = source.get("type")
+    if source_type == "private":
+        return str(user_id)
+    value = str(source.get("name", "")).strip()
+    if not value:
+        return None
+    if "t.me/" in value:
+        username = _public_username(value)
+        return f"@{username}" if username else None
+    if value.lstrip("-").isdigit():
+        return int(value)
+    return value if value.startswith("@") else f"@{value}"
+
+
+async def _handle_admin_pending(update, context):
+    """Handle admin text states here before source-linking can consume them."""
+    user = update.effective_user
+    message = update.effective_message
+    if user is None or message is None or user.id != bot.ADMIN_ID:
+        return False
+
+    if context.user_data.get("waiting_welcome"):
+        text = message.text
+        if not text or not text.strip():
+            await message.reply_text("أرسل نصًا غير فارغ لرسالة الترحيب.")
+            return True
+        try:
+            data = bot.load_data()
+            data["welcome_msg"] = text
+            bot.save_data(data)
+        except Exception as exc:
+            print(f"[ADMIN] Failed to save welcome message: {exc}")
+            await message.reply_text("❌ لم أتمكن من حفظ رسالة الترحيب. راجع سجل التشغيل.")
+            return True
+        context.user_data.pop("waiting_welcome", None)
+        # Avoid stale link/broadcast state intercepting the next admin message.
+        context.user_data.pop("waiting_source_type", None)
+        context.user_data.pop("waiting_broadcast", None)
+        await message.reply_text("✅ تم حفظ رسالة الترحيب الجديدة بنجاح!")
+        return True
+
+    if context.user_data.get("waiting_broadcast"):
+        text = message.text
+        if not text or not text.strip():
+            await message.reply_text("أرسل نصًا غير فارغ للإذاعة.")
+            return True
+        mode = context.user_data.get("waiting_broadcast")
+        data = bot.load_data()
+        targets = set()
+        for user_id, user_info in data.get("users", {}).items():
+            for source in user_info.get("sources", {}).values():
+                if source.get("status") != "active":
+                    continue
+                if mode == "private" and source.get("type") != "private":
+                    continue
+                target = _delivery_target(user_id, source)
+                if target is not None:
+                    targets.add(target)
+        sent = 0
+        failed = 0
+        for target in targets:
+            try:
+                await context.bot.send_message(chat_id=target, text=text)
+                sent += 1
+            except Exception as exc:
+                failed += 1
+                print(f"[ADMIN] Broadcast failed for {target}: {exc}")
+        context.user_data.pop("waiting_broadcast", None)
+        await message.reply_text(f"📣 انتهت الإذاعة. تم الإرسال إلى {sent} وجهة، وتعذر الإرسال إلى {failed} وجهة.")
+        return True
+
+    return False
+
+
 async def handle_user_messages(update, context):
     message = update.effective_message
     user = update.effective_user
     if message is None or user is None:
         return
 
-    # Support both current Telegram forward_origin and the legacy field.
+    # Admin text-entry states take precedence over a stale channel-link state.
+    if await _handle_admin_pending(update, context):
+        return
+
     origin = getattr(message, "forward_origin", None)
     source_chat = getattr(origin, "chat", None) or getattr(origin, "sender_chat", None)
     if source_chat is None:
@@ -89,9 +167,7 @@ async def handle_user_messages(update, context):
             chat = await context.bot.get_chat(f"@{username}")
         except Exception as exc:
             print(f"[LINK] Failed resolving @{username}: {exc}")
-            await message.reply_text(
-                "تعذّر الوصول للرابط. تحقق من الاسم وأضف البوت إلى القناة/المجموعة."
-            )
+            await message.reply_text("تعذّر الوصول للرابط. تحقق من الاسم وأضف البوت إلى القناة/المجموعة.")
             return
         chat_type = getattr(chat, "type", None)
         if chat_type not in ("channel", "group", "supergroup"):
@@ -111,52 +187,33 @@ async def handle_user_messages(update, context):
         )
         return
 
-    # Do not call bot.handle_user_messages here: it now points to this wrapper.
-    # The saved original handles welcome editing and all other built-in flows.
+    # All other bot workflows remain handled by the original implementation.
     await _original_handle_user_messages(update, context)
 
 
 async def send_scheduled_sunnahs(context):
-    """Deliver the scheduled sunnah to saved private, channel, and group targets."""
     data = bot.load_data()
     sunnahs = bot.load_sunnahs()
     if not sunnahs:
         print("[SCHEDULE] Sunnah data is empty or unavailable.")
         return
-
     index = bot.get_current_index()
     if not isinstance(index, int) or not 0 <= index < len(sunnahs):
         index = 0
     text = bot.format_sunnah_message(sunnahs[index], index + 1)
-    next_index = (index + 1) % len(sunnahs)
-
     for user_id, user_info in data.get("users", {}).items():
         for source in user_info.get("sources", {}).values():
             if source.get("status") != "active":
                 continue
-            source_type = source.get("type")
-            target = str(user_id) if source_type == "private" else str(source.get("name", "")).strip()
-            if not target:
-                print(f"[SCHEDULE] Skipping empty target for user {user_id}.")
+            target = _delivery_target(user_id, source)
+            if target is None:
                 continue
-            if source_type != "private":
-                if "t.me/" in target:
-                    username = _public_username(target)
-                    if not username:
-                        print(f"[SCHEDULE] Invalid saved Telegram link: {target}")
-                        continue
-                    target = f"@{username}"
-                elif target.lstrip("-").isdigit():
-                    target = int(target)
-                elif not target.startswith("@"):
-                    target = f"@{target}"
             try:
                 await context.bot.send_message(chat_id=target, text=text)
                 print(f"[SCHEDULE] Sent to {target}")
             except Exception as exc:
                 print(f"[SCHEDULE] Failed to send to {target}: {exc}")
-
-    bot.save_current_index(next_index)
+    bot.save_current_index((index + 1) % len(sunnahs))
 
 
 def main():
