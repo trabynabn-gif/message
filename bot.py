@@ -474,31 +474,35 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
         )  
         return  
 
-    # 4. معالجة إرسال الرابط المباشر أو المعرف للقنوات والمجموعات
+    # 4. معالجة إرسال الرابط المباشر أو المعرف للقنوات والمجموعات (بدون إيقاف لو حدث خطأ)
     if context.user_data.get("waiting_source_type"):  
         st_type = context.user_data["waiting_source_type"]  
         context.user_data.clear()  
           
         target_input = text.strip()  
-        if "t.me/" in target_input:  
-            target_input = "@" + target_input.rstrip("/").split("/")[-1]  
+        if "t.me/" in target_input:
+            clean_val = target_input.rstrip("/").split("/")[-1]
+            if clean_val.startswith("+") or "joinchat" in target_input:
+                target_input = target_input
+            else:
+                target_input = "@" + clean_val
         elif not target_input.startswith("@") and not target_input.startswith("-"):  
             target_input = "@" + target_input  
 
+        target_title = target_input
         try:
             chat_obj = await context.bot.get_chat(target_input)
-            target_id = str(chat_obj.id)
-            target_title = chat_obj.title or target_input
-            target_username = f"@{chat_obj.username}" if chat_obj.username else target_id
+            if chat_obj.title:
+                target_title = chat_obj.title
+            if chat_obj.username:
+                target_input = f"@{chat_obj.username}"
         except Exception:
-            target_id = target_input
-            target_title = target_input
-            target_username = target_input
+            pass  # لو البوت مش مشرف أو التيليجرام منع الجلب، هيعدي ويكمل عادي من غير ما يعلق
 
         source_id = "src_" + str(len(data["users"].get(chat_id, {}).get("sources", {})) + 1)  
         if chat_id in data["users"]:  
             data["users"][chat_id]["sources"][source_id] = {  
-                "name": target_username,  
+                "name": target_input,  
                 "title": target_title,  
                 "type": st_type,  
                 "status": "active"  
@@ -533,7 +537,7 @@ def main():
     application.add_handler(MessageHandler(filters.FORWARDED, handle_user_messages))  
     application.add_handler(MessageHandler(filters.Document.ALL, handle_admin_documents))  
       
-    print("Bot Resala is running with fixed channel links handler...")  
+    print("Bot Resala is running with foolproof link handler...")  
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
