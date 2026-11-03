@@ -18,7 +18,7 @@ def load_data():
                 if isinstance(data.get("users"), list):
                     return {
                         "users": {},
-                        "welcome_msg": "وعليكم السلام ورحمة الله وبركاته 🌸\n\nحياك الله يا {name} في بوت **\"رِسالة\"** 📖✨\nنسأل الله أن يجعلنا وإياكم ممن يستمعون القول فيتبعون أحسنه، وأن يحيي قلوبنا بسنن الحبيب المصطفى ﷺ.\n\n🌱 **نصيحة وأجر دائم:**\n\"الدال على الخير كفاعله\".. ندعوك لمشاركة البوت ووضعه في قنواتك ومجموعاتك ومع أحبابك، لتنال أجر إحياء سنة من سنن الحبيب ﷺ ويكون لك مثل أجور كل من عمل بها بإذن الله.\n\n⚠️ **إبراء ذمة وتنبيه:**\nبشر نحن نخطئ ونسهو، ولسنا بمعصومين؛ فإن وجدتم خطأً إملائياً، أو التبس عليكم فهم حديث، فنرجو ألا تترددوا في إعلامنا فوراً لنصححه، فجزاكم الله عنا خيراً.\n\n💡 **نبذة عن البوت وكيفية العمل عليه:**\nهذا البوت وُجد ليكون رفيقك اليومي في إرسال السنن النبوية الصحيحة والثابتة بشكل منتظم:\n1️⃣ يمكنك تصفح الأحاديث يدوياً في أي وقت تشاء.\n2️⃣ يمكنك التحكم بفاصل وقت التذكير وتظبيطه بما يناسب وقتك.\n3️⃣ يمكنك ربط البوت بقناتك أو مجموعتك بكل سهولة عبر توجيه رسالة (Forward) من هنا، ليبدأ بنشر السنن أوتوماتيكياً وبكل سلاسة.\n\nاختر ما ترغب به من القائمة أدناه للبدء 👇",
+                        "welcome_msg": "وعليكم السلام ورحمة الله وبركاته 🌸\n\nحياك الله يا {name} في بوت **\"رِسالة\"** 📖✨\nنسأل الله أن يجعلنا وإياكم ممن يستمعون القول فيتبعون أحسنه، وأن يحيي قلوبنا بسنن الحبيب المصطفى ﷺ.\n\n🌱 **نصيحة وأجر دائم:**\n\"الدال على الخير كفاعله\".. ندعوك لمشاركة البوت ووضعه في قنواتك ومجموعاتك ومع أحبابك، لتنال أجر إحياء سنة من سنن الحبيب ﷺ ويكون لك مثل أجور كل من عمل بها بإذن الله.\n\n⚠️ **إبراء ذمة وتنبيه:**\nبشر نحن نخطئ ونسهو، ولسنا بمعصومين؛ فإن وجدتم خطأً إملائياً، أو التبس عليكم فهم حديث، فنرجو ألا تترددوا في إعلامنا فوراً لنصححه، فجزاكم الله عنا خيراً.\n\n💡 **نبذة عن البوت وكيفية العمل عليه:**\nهذا البوت وُجد ليكون رفيقك اليومي في إرسال السنن النبوية الصحيحة والثابتة بشكل منتظم:\n1️⃣ يمكنك تصفح الأحاديث يدوياً في أي وقت تشاء.\n2️⃣ يمكنك التحكم بفاصل وقت التذكير وتظبيطه بما يناسب وقتك.\n3️⃣ يمكنك ربط البوت بقناتك أو مجموعتك بكل سهولة عبر إرسال الرابط أو توجيه رسالة (Forward)، ليبدأ بنشر السنن أوتوماتيكياً وبكل سلاسة.\n\nاختر ما ترغب به من القائمة أدناه للبدء 👇",
                         "app_file": None
                     }
                 return data
@@ -27,7 +27,7 @@ def load_data():
             
     return {
         "users": {},
-        "welcome_msg": "وعليكم السلام ورحمة الله وبركاته 🌸\n\nحياك الله يا {name} في بوت **\"رِسالة\"** 📖✨\nنسأل الله أن يجعلنا وإياكم ممن يستمعون القول فيتبعون أحسنه، وأن يحيي قلوبنا بسنن الحبيب المصطفى ﷺ.\n\n🌱 **نصيحة وأجر دائم:**\n\"الدال على الخير كفاعله\".. ندعوك لمشاركة البوت ووضعه في قنواتك ومجموعاتك ومع أحبابك، لتنال أجر إحياء سنة من سنن الحبيب ﷺ ويكون لك مثل أجور كل من عمل بها بإذن الله.\n\n⚠️ **إبراء ذمة وتنبيه:**\nبشر نحن نخطئ ونسهو، ولسنا بمعصومين؛ فإن وجدتم خطأً إملائياً، أو التبس عليكم فهم حديث، فنرجو ألا تترددوا في إعلامنا فوراً لنصححه، فجزاكم الله عنا خيراً.\n\n💡 **نبذة عن البوت وكيفية العمل عليه:**\nهذا البوت وُجد ليكون رفيقك اليومي في إرسال السنن النبوية الصحيحة والثابتة بشكل منتظم:\n1️⃣ يمكنك تصفح الأحاديث يدوياً في أي وقت تشاء.\n2️⃣ يمكنك التحكم بفاصل وقت التذكير وتظبيطه بما يناسب وقتك.\n3️⃣ يمكنك ربط البوت بقناتك أو مجموعتك بكل سهولة عبر توجيه رسالة (Forward) من هنا، ليبدأ بنشر السنن أوتوماتيكياً وبكل سلاسة.\n\nاختر ما ترغب به من القائمة أدناه للبدء 👇",
+        "welcome_msg": "وعليكم السلام ورحمة الله وبركاته 🌸\n\nحياك الله يا {name} في بوت **\"رِسالة\"** 📖✨\nنسأل الله أن يجعلنا وإياكم ممن يستمعون القول فيتبعون أحسنه، وأن يحيي قلوبنا بسنن الحبيب المصطفى ﷺ.\n\n🌱 **نصيحة وأجر دائم:**\n\"الدال على الخير كفاعله\".. ندعوك لمشاركة البوت ووضعه في قنواتك ومجموعاتك ومع أحبابك، لتنال أجر إحياء سنة من سنن الحبيب ﷺ ويكون لك مثل أجور كل من عمل بها بإذن الله.\n\n⚠️ **إبراء ذمة وتنبيه:**\nبشر نحن نخطئ ونسهو، ولسنا بمعصومين؛ فإن وجدتم خطأً إملائياً، أو التبس عليكم فهم حديث، فنرجو ألا تترددوا في إعلامنا فوراً لنصححه، فجزاكم الله عنا خيراً.\n\n💡 **نبذة عن البوت وكيفية العمل عليه:**\nهذا البوت وُجد ليكون رفيقك اليومي في إرسال السنن النبوية الصحيحة والثابتة بشكل منتظم:\n1️⃣ يمكنك تصفح الأحاديث يدوياً في أي وقت تشاء.\n2️⃣ يمكنك التحكم بفاصل وقت التذكير وتظبيطه بما يناسب وقتك.\n3️⃣ يمكنك ربط البوت بقناتك أو مجموعتك بكل سهولة عبر إرسال الرابط أو توجيه رسالة (Forward)، ليبدأ بنشر السنن أوتوماتيكياً وبكل سلاسة.\n\nاختر ما ترغب به من القائمة أدناه للبدء 👇",
         "app_file": None
     }
 
@@ -59,7 +59,6 @@ def save_current_index(index):
 
 def format_sunnah_message(sunnah, index):
     raw_text = sunnah.get('text', '')
-    
     clean_text = re.sub(r'\(حديث رقم.*?\)', '', raw_text).strip()
     clean_text = re.sub(r'حديث رقم.*', '', clean_text).strip()
     clean_text = re.sub(r'\(رسالة.*?\)', '', clean_text).strip()
@@ -108,7 +107,6 @@ async def send_scheduled_sunnahs(context: ContextTypes.DEFAULT_TYPE):
                             target = "@" + target
 
                         await context.bot.send_message(chat_id=target, text=formatted_msg)
-                        print(f"[SUCCESS] Sent clean message to target: {target}")
                     except Exception as e:
                         print(f"[ERROR] Failed to send to {target}: {e}")
 
@@ -127,11 +125,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
         }
         save_data(data)
-        try:
-            admin_msg = f"New user joined:\nName: {user.first_name}\nID: {chat_id}"
-            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg)
-        except Exception as e:
-            print(e)
 
     keyboard = [
         [InlineKeyboardButton("📖 تصفح الأحاديث", callback_data="next_sunnah")],
@@ -189,8 +182,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         try:
             await query.edit_message_text(text=formatted_msg, reply_markup=InlineKeyboardMarkup(keyboard))
-        except Exception as e:
-            print(f"[ERROR editing message]: {e}")
+        except Exception:
             await query.answer("تم عرض الحديث بالفعل أو حدث تحديث", show_alert=False)
             
     elif query.data == "about":
@@ -414,43 +406,60 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = str(user.id)
-    text = update.message.text
+    text = update.message.text or update.message.caption or ""
     data = load_data()
     
+    # 1. معالجة الرسالة المحولة (Forward) من القنوات والمجموعات
     if update.message.forward_from_chat:
         f_chat = update.message.forward_from_chat
         f_id = str(f_chat.id)
-        f_title = f_chat.title or f_chat.username or f"قناة/مجموعة {f_id}"
+        target_name = f"@{f_chat.username}" if f_chat.username else f_id
+        f_title = f_chat.title or target_name
         f_type = "channel" if f_chat.type == "channel" else "group"
         
         source_id = "src_" + str(len(data["users"].get(chat_id, {}).get("sources", {})) + 1)
         if chat_id in data["users"]:
             data["users"][chat_id]["sources"][source_id] = {
-                "name": f_id,
+                "name": target_name,
                 "title": f_title,
                 "type": f_type,
                 "status": "active"
             }
             save_data(data)
             
-        await update.message.reply_text(f"✅ تم ربط الـ {f_type} بنجاح!\nالاسم: `{f_title}`\nالايدي: `{f_id}`\n\nوتم تفعيل النشر التلقائي فيها!")
+        await update.message.reply_text(
+            f"✅ تم ربط الـ {f_type} بنجاح عبر التوجيه!\n"
+            f"الاسم: `{f_title}`\n"
+            f"المعرف: `{target_name}`\n\n"
+            f"📌 تأكد أن البوت مشرف (Admin) في القناة/المجموعة."
+        )
         return
 
+    # 2. معالجة إرسال الرابط المباشر أو المعرف عند الضغط على أزرار الربط
     if context.user_data.get("waiting_source_type"):
         st_type = context.user_data["waiting_source_type"]
         context.user_data.clear()
         
+        target_input = text.strip()
+        if "t.me/" in target_input:
+            target_input = "@" + target_input.rstrip("/").split("/")[-1]
+        elif not target_input.startswith("@") and not target_input.startswith("-"):
+            target_input = "@" + target_input
+
         source_id = "src_" + str(len(data["users"].get(chat_id, {}).get("sources", {})) + 1)
         if chat_id in data["users"]:
             data["users"][chat_id]["sources"][source_id] = {
-                "name": text,
-                "title": text,
+                "name": target_input,
+                "title": target_input,
                 "type": st_type,
                 "status": "active"
             }
             save_data(data)
             
-        await update.message.reply_text(f"✅ تم إضافة القناة/المجموعة بنجاح:\n`{text}`\n\nتأكد أن البوت (مشرف / Admin) في القناة وإلا فلن يستطيع النشر فيها.")
+        await update.message.reply_text(
+            f"✅ تم إضافة القناة/المجموعة بنجاح من خلال الرابط:\n`{target_input}`\n\n"
+            f"📌 تأكد أن البوت مشرف (Admin) في القناة/المجموعة."
+        )
         return
 
     if user.id == ADMIN_ID:
@@ -484,7 +493,6 @@ def main():
     application = Application.builder().token(TOKEN).post_init(set_bot_commands).build()
     
     job_queue = application.job_queue
-    # تم إرجاع الفاصل الزمني الافتراضي (مثلاً كل 10 دقائق = 600 ثانية)
     job_queue.run_repeating(send_scheduled_sunnahs, interval=600, first=10)
 
     application.add_handler(CommandHandler("start", start))
@@ -493,9 +501,8 @@ def main():
     application.add_handler(MessageHandler(filters.FORWARDED, handle_user_messages))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_admin_documents))
     
-    print("Bot Resala is running with new token and standard schedule...")
-    application.run_polling()
+    print("Bot Resala is running with fixed crash & updates...")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     main()
-# update
